@@ -5,12 +5,16 @@ declare const _globalThis: {
   Zotero_Tabs: typeof Zotero_Tabs;
   window: Window;
   document: Document;
-  ztoolkit: typeof ztoolkit;
+  ztoolkit: ZToolkit;
   addon: typeof addon;
 };
 
-// declare const ztoolkit: import("../src/addon").MyToolkit;
-declare const ztoolkit: import("zotero-plugin-toolkit").ZoteroToolkit;
+// Use custom ZToolkit type that matches our MyToolkit implementation
+declare type ZToolkit = ReturnType<
+  typeof import("../src/utils/ztoolkit").createZToolkit
+>;
+
+declare const ztoolkit: ZToolkit;
 
 declare const rootURI: string;
 
