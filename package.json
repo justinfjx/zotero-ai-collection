@@ -57,7 +57,7 @@
     "release-it": "^15.10.3",
     "replace-in-file": "^6.3.5",
     "typescript": "^5.0.4",
-    "zotero-types": "^1.0.14"
+    "zotero-types": "^4.0.5"
   },
   "prettier": {
     "tabWidth": 2
