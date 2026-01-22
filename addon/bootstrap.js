@@ -1,8 +1,8 @@
 /**
- * Most of this code is from Zotero team's official Make It Red example[1]
- * or the Zotero 7 documentation[2].
- * [1] https://github.com/zotero/make-it-red
- * [2] https://www.zotero.org/support/dev/zotero_7_for_developers
+ * Bootstrap entry point for Zotero 7 plugin
+ * Based on Zotero team's official Make It Red example
+ * https://github.com/zotero/make-it-red
+ * https://www.zotero.org/support/dev/zotero_7_for_developers
  */
 
 if (typeof Zotero == "undefined") {

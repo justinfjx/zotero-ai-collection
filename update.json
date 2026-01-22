@@ -1,10 +1,10 @@
 {
   "addons": {
-    "addontemplate@euclpts.com": {
+    "zotero-ai-collection@example.com": {
       "updates": [
         {
-          "version": "0.1.6",
-          "update_link": "https://github.com/windingwind/zotero-addon-template/releases/latest/download/zotero-addon-template.xpi",
+          "version": "1.0.0",
+          "update_link": "https://github.com/justinfjx/zotero-ai-collection/releases/latest/download/zotero-ai-collection.xpi",
           "applications": {
             "gecko": {
               "strict_min_version": "60.0"
@@ -12,8 +12,8 @@
           }
         },
         {
-          "version": "0.1.6",
-          "update_link": "https://github.com/windingwind/zotero-addon-template/releases/latest/download/zotero-addon-template.xpi",
+          "version": "1.0.0",
+          "update_link": "https://github.com/justinfjx/zotero-ai-collection/releases/latest/download/zotero-ai-collection.xpi",
           "applications": {
             "zotero": {
               "strict_min_version": "6.999"

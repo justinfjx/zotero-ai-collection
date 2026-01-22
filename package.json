@@ -1,15 +1,15 @@
 {
-  "name": "zotero-addon-template",
-  "version": "0.1.6",
-  "description": "Zotero Addon Template",
+  "name": "zotero-ai-collection",
+  "version": "1.0.0",
+  "description": "AI-powered literature classification for Zotero",
   "config": {
-    "addonName": "Zotero Addon Template",
-    "addonID": "addontemplate@euclpts.com",
-    "addonRef": "addontemplate",
-    "addonInstance": "AddonTemplate",
-    "prefsPrefix": "extensions.zotero.addontemplate",
-    "releasepage": "https://github.com/windingwind/zotero-addon-template/releases/latest/download/zotero-addon-template.xpi",
-    "updaterdf": "https://raw.githubusercontent.com/windingwind/zotero-addon-template/bootstrap/update.json"
+    "addonName": "Zotero AI Collection",
+    "addonID": "zotero-ai-collection@example.com",
+    "addonRef": "zoteroaicollection",
+    "addonInstance": "ZoteroAICollection",
+    "prefsPrefix": "extensions.zotero.zoteroaicollection",
+    "releasepage": "https://github.com/justinfjx/zotero-ai-collection/releases/latest/download/zotero-ai-collection.xpi",
+    "updaterdf": "https://raw.githubusercontent.com/justinfjx/zotero-ai-collection/main/update.json"
   },
   "main": "src/index.ts",
   "scripts": {
@@ -31,14 +31,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/windingwind/zotero-addon-template.git"
+    "url": "git+https://github.com/justinfjx/zotero-ai-collection.git"
   },
-  "author": "windingwind",
+  "author": "Jiaxin",
   "license": "AGPL-3.0-or-later",
   "bugs": {
-    "url": "https://github.com/windingwind/zotero-addon-template/issues"
+    "url": "https://github.com/justinfjx/zotero-ai-collection/issues"
   },
-  "homepage": "https://github.com/windingwind/zotero-addon-template#readme",
+  "homepage": "https://github.com/justinfjx/zotero-ai-collection#readme",
   "dependencies": {
     "zotero-plugin-toolkit": "^2.1.3"
   },
