@@ -239,6 +239,24 @@ function bindPrefEvents() {
   const win = addon.data.prefs!.window;
   const doc = win.document;
 
+  // 🥚 Easter Egg 1: Title click easter egg (5 clicks)
+  let titleClickCount = 0;
+  let titleLastClickTime = 0;
+  doc.querySelector(`#zotero-prefpane-${config.addonRef}-title`)
+    ?.addEventListener("click", () => {
+      const now = Date.now();
+      if (now - titleLastClickTime < 500) {
+        titleClickCount++;
+        if (titleClickCount >= 5) {
+          win.alert("🎉 你发现了彩蛋！\n\n感谢使用 Collection for Zotero\n\nMade with ❤️ by Justin\n\n愿你的文献永远井井有条 📚");
+          titleClickCount = 0;
+        }
+      } else {
+        titleClickCount = 1;
+      }
+      titleLastClickTime = now;
+    });
+
   // Config selector change
   doc
     .querySelector(`#zotero-prefpane-${config.addonRef}-configSelect`)
@@ -335,6 +353,24 @@ function bindPrefEvents() {
     });
 
   // Toggle API key visibility
+  const toggleBtn = doc.querySelector(
+    `#zotero-prefpane-${config.addonRef}-toggleApiKey`
+  );
+
+  // 🥚 Easter Egg 2: Long press eye button (3 seconds)
+  let pressTimer: number | null = null;
+  toggleBtn?.addEventListener("mousedown", () => {
+    pressTimer = win.setTimeout(() => {
+      win.alert("👀 你盯着我看了好久...\n\n是想偷看 API Key 吗？\n\n放心，你的密钥很安全 🔐");
+    }, 3000) as unknown as number;
+  });
+  toggleBtn?.addEventListener("mouseup", () => {
+    if (pressTimer) clearTimeout(pressTimer);
+  });
+  toggleBtn?.addEventListener("mouseleave", () => {
+    if (pressTimer) clearTimeout(pressTimer);
+  });
+
   doc
     .querySelector(`#zotero-prefpane-${config.addonRef}-toggleApiKey`)
     ?.addEventListener("click", () => {
@@ -357,6 +393,8 @@ function bindPrefEvents() {
     });
 
   // Test connection button
+  // 🥚 Easter Egg 3: Click test button 10 times
+  let testClickCount = 0;
   doc
     .querySelector(`#zotero-prefpane-${config.addonRef}-test`)
     ?.addEventListener("click", async () => {
@@ -366,6 +404,15 @@ function bindPrefEvents() {
       const resultDiv = doc.querySelector(
         `#zotero-prefpane-${config.addonRef}-testResult`
       ) as HTMLDivElement;
+
+      // Easter egg: 10 rapid clicks
+      testClickCount++;
+      if (testClickCount >= 10) {
+        resultDiv.textContent = "🤖 别点了！AI 说它很累...需要休息一下 😴";
+        resultDiv.style.color = "#ff9800";
+        testClickCount = 0;
+        return;
+      }
 
       button.disabled = true;
       button.textContent = getString("prefs.testing") || "Testing...";

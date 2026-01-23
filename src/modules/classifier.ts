@@ -1137,8 +1137,23 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
     );
   }
 
+  // 🥚 Easter Egg 4: Random fun messages on completion
+  const easterEggs = [
+    "",
+    "",
+    "",
+    "",
+    "",
+    "\n\n🎲 今日幸运提示：好好读论文！",
+    "\n\n☕ 分类完成，该喝杯咖啡了",
+    "\n\n📚 论文虐我千百遍，我待论文如初恋",
+    "\n\n🚀 又整理了一批文献，离毕业更近一步！",
+    "\n\n🧠 AI 已尽力，剩下的看你了",
+  ];
+  const egg = easterEggs[Math.floor(Math.random() * easterEggs.length)];
+
   // Show result summary
   win.alert(
-    `${getString("result.title") || "[AI Classification Complete]"}\n\n${getString("result.processed") || "Items processed:"} ${result.processed}\n${getString("result.added") || "Collections added:"} ${result.totalAdded}`
+    `${getString("result.title") || "[AI Classification Complete]"}\n\n${getString("result.processed") || "Items processed:"} ${result.processed}\n${getString("result.added") || "Collections added:"} ${result.totalAdded}${egg}`
   );
 }
