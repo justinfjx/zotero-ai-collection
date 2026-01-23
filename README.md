@@ -1,6 +1,6 @@
 <!--
-  README 默认使用中文编写。
-  如需英文版/双语版，欢迎提交 PR。
+  English README.
+  中文版：README-zh.md
 -->
 
 <div align="center">
@@ -8,7 +8,10 @@
 
 # Collection for Zotero
 
-用 LLM（OpenAI Chat Completions 兼容接口）根据「标题 + 摘要」为条目智能推荐 Zotero 分类（Collection），并提供**可审核**的确认对话框：你决定加到哪些分类、是否拒绝、是否归档。
+[![README - English](https://img.shields.io/badge/README-English-blue?style=flat-square)](README.md)
+[![README - 中文](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-red?style=flat-square)](README-zh.md)
+
+Use an LLM (an OpenAI Chat Completions compatible API) to recommend Zotero collections based on each item's **title + abstract**, with a **reviewable** confirmation dialog: you decide which collections to add, whether to reject, and whether to archive.
 
 [![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
 [![zotero target version](https://img.shields.io/badge/Zotero-8-blue?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org/support/beta_builds)
@@ -21,188 +24,188 @@
 
 ---
 
-## ⚠️ 安全提示（早期测试版）
+## ⚠️ Safety Notice (Early Beta)
 
-> 本插件目前为**早期测试版本**：功能与交互可能随时变动，AI 推荐结果也可能不准确。
+> This plugin is currently in an **early beta** stage: features and UX may change at any time, and AI recommendations may be inaccurate.
+>
+> - **Back up your Zotero data directory/database first**, and try it on a test library or a small set of items;
+> - Batch mode calls the AI for all selected items first, which may incur higher costs;
+> - Carefully review each item in the confirmation dialog to avoid adding items to unwanted collections.
+>
+> Please set expectations accordingly (you may need to troubleshoot). Issues and PRs are welcome.
 
-> - **请先备份 Zotero 数据目录/数据库**，并建议先在测试库或少量条目上试用；
-> - 批量模式会先对所有条目调用 AI，可能产生较高调用成本；
-> - 请务必在确认对话框中逐条核对，避免将条目误加入不希望的分类。
+## 🧭 Table of Contents
 
-> 使用前请有一定心理预期（可能需要排错/折腾）。如遇问题欢迎提 issue。
-
-## 🧭 目录
-
-- [🧐 这是什么？](#-这是什么)
-- [✨ 主要功能](#-主要功能)
-- [👋 安装](#-安装)
-- [😎 快速上手](#-快速上手)
-- [⚙️ 设置说明](#-设置说明)
-- [🔌 API 兼容性与输出格式](#-api-兼容性与输出格式)
-- [🔒 隐私、成本与安全](#-隐私成本与安全)
-- [❓ 常见问题（FAQ）](#-常见问题faq)
-- [🛠️ 开发与构建](#-开发与构建)
+- [🧐 What Is This?](#-what-is-this)
+- [✨ Key Features](#-key-features)
+- [👋 Installation](#-installation)
+- [😎 Quick Start](#-quick-start)
+- [⚙️ Settings](#-settings)
+- [🔌 API Compatibility & Output Format](#-api-compatibility--output-format)
+- [🔒 Privacy, Cost & Security](#-privacy-cost--security)
+- [❓ FAQ](#-faq)
+- [🛠️ Development & Build](#-development--build)
 - [📄 License](#-license)
-- [🙏 致谢](#-致谢)
+- [🙏 Acknowledgements](#-acknowledgements)
 
-## 🧐 这是什么？
+## 🧐 What Is This?
 
-**Zotero AI Collection** 是一个 Zotero 插件：当你选中若干条目后，右键点击 **“AI 智能分类”**，插件会把这些条目的「标题/摘要」与当前库中「可选分类路径列表」发给你配置的 LLM，让它从**已有分类路径**中挑选最合适的 1–3 个路径，然后你再在对话框里确认（可勾选/取消勾选）。
+**Zotero AI Collection** is a Zotero plugin: after you select one or more items, right-click **“AI Smart Collections”**. The plugin sends each item's **title/abstract** and a list of **available collection paths** in your library to your configured LLM. The model then picks the best 1–3 paths from **existing collections**, and you confirm the final selections in a dialog (check/uncheck).
 
-插件默认**不会创建新分类**（除了“未分类”文件夹外），也不会改动条目的其它元数据；它做的事情只有：
+By default, the plugin **does not create new collections** (except the “archive” collection used by “Reject & archive”), and it does not modify any other item metadata. It only:
 
-- 将条目添加到你确认的 Collection(s)
-- （可选）当你选择 `A/B/C` 时，同时加入 `A`、`A/B`、`A/B/C`
-- （可选）你点击“拒绝并归档”时，自动创建一个顶层归档分类（默认名：`未分类`）并将条目加入
+- Adds items to the collection(s) you confirm
+- (Optional) When you select `A/B/C`, also adds the item to `A`, `A/B`, and `A/B/C`
+- (Optional) When you click “Reject & archive”, automatically creates a top-level archive collection (default name: `未分类`) and adds the item to it
 
-> 重要说明：插件提供给 AI 的候选分类是「叶子分类路径」（最深层的那些）。如果你希望 AI 能选中某个中间层级，请确保它本身是叶子节点（没有子分类），或启用“添加到路径中的所有分类”来把叶子选择扩展到父级。
+> Important: the candidate collections provided to the AI are **leaf collection paths** (the deepest nodes). If you want the AI to be able to pick an intermediate-level collection, make sure that collection itself is a leaf (has no sub-collections), or enable “Add to all collections in the path” to expand a leaf selection to its parent collections.
 
-## ✨ 主要功能
+## ✨ Key Features
 
-- 🧠 **智能推荐分类路径**：基于标题 + 摘要，从你现有的分类树中选择 1–3 个最合适路径
-- ✅ **可审核的确认对话框**：
-  - 逐篇确认（每篇跑完 AI 就弹窗，可中途取消停止）
-  - 批量确认（先全部跑完 AI，再统一审核；更快，但会先产生全部请求成本）
-- 🗂️ **可控的候选分类范围**：在设置里勾选“哪些分类可被提供给 AI”（用于控制准确率与 Token 成本）
-- 🧩 **多配置方案（API Profiles）**：保存/重命名/删除多套 `API Endpoint + Model + API Key`
-- 🧾 **可编辑分类 Prompt**：自定义系统提示词（插件会在后台附加“输出格式要求”）
-- 🧷 **添加到路径所有父分类（可选）**
-- 📦 **拒绝并归档**：一键把条目加入一个归档分类（不存在会自动创建）
-- 🇨🇳 **中文标题翻译（可选）**：仅用于确认对话框展示（不写回条目字段）
+- 🧠 **Smart collection path recommendation**: based on title + abstract, choose 1–3 best paths from your existing collection tree
+- ✅ **Reviewable confirmation dialog**:
+  - Per-item review (shows a dialog after each AI call; you can cancel anytime)
+  - Batch review (calls AI for all items first, then shows a summary review window; faster, but costs are incurred upfront)
+- 🗂️ **Controllable candidate collection scope**: choose which collection branches can be provided to the AI (controls accuracy and token cost)
+- 🧩 **Multiple API Profiles**: save/rename/delete multiple `API Endpoint + Model + API Key` configs
+- 🧾 **Editable collection prompt**: customize the system prompt (the plugin will append output-format requirements in the background)
+- 🧷 **Add to all parent collections in the path** (optional)
+- 📦 **Reject & archive**: one-click to move items into an archive collection (auto-created if missing)
+- 🇨🇳 **Chinese title translation** (optional): only for display in the confirmation dialog (does not write back to item fields)
 
-## 👋 安装
+## 👋 Installation
 
-### 方式 A：安装 `.xpi`（推荐）
+### Option A: Install the `.xpi` (Recommended)
 
-1. 下载最新安装包：`zotero-ai-collection.xpi`
-   - GitHub Releases（latest）：`https://github.com/justinfjx/zotero-ai-collection/releases/latest/download/zotero-ai-collection.xpi`
-2. Zotero 顶部菜单：`工具 (Tools) → 附加组件 (Add-ons)`
-3. 右上角齿轮：`Install Add-on From File...`，选择下载的 `.xpi`
-4. 重启 Zotero
+1. Download the latest package: `zotero-ai-collection.xpi`
+   - GitHub Releases (latest): `https://github.com/justinfjx/zotero-ai-collection/releases/latest/download/zotero-ai-collection.xpi`
+2. Zotero menu: `Tools → Add-ons`
+3. Top-right gear: `Install Add-on From File...`, then select the downloaded `.xpi`
+4. Restart Zotero
 
-### 方式 B：从源码构建
+### Option B: Build from source
 
-见下方「开发与构建」。
+See “Development & Build” below.
 
-## 😎 快速上手
+## 😎 Quick Start
 
-1. 在 Zotero 里先建立好你的分类树（Collections），建议使用清晰的层级结构
-2. 打开插件设置：
-   - Windows/Linux：`编辑 → 首选项 (Preferences)`
-   - macOS：`Zotero → Settings/Preferences`
-3. 在 `Zotero AI Collection` 设置页中：
-   - 填写 `API Endpoint` / `Model Name` / `API Key`
-   - 点击 **“测试连接”**，确保可用
-   - （可选）在「分类选择」里取消勾选不希望提供给 AI 的分类分支
-   - （可选）选择「逐篇确认 / 批量确认」、是否“添加到路径中的所有分类”、是否启用中文标题翻译
-4. 在条目列表中选中一个或多个条目 → 右键 → **AI 智能分类**
-5. 在确认对话框里勾选你要添加的分类路径，点击确认；或选择拒绝/归档
+1. Create your collection tree in Zotero first (Collections). A clear hierarchy is recommended.
+2. Open plugin settings:
+   - Windows/Linux: `Edit → Preferences`
+   - macOS: `Zotero → Settings/Preferences`
+3. In the `Zotero AI Collection` settings page:
+   - Fill in `API Endpoint` / `Model Name` / `API Key`
+   - Click **“Test Connection”** to make sure it works
+   - (Optional) In “Collection Selection”, uncheck collection branches you don't want to provide to the AI
+   - (Optional) Choose “Per-item review / Batch review”, whether to “Add to all collections in the path”, and whether to enable Chinese title translation
+4. Select one or more items in the item list → right-click → **AI Smart Collections**
+5. In the confirmation dialog, check the collection paths you want and confirm; or reject/archive
 
-## ⚙️ 设置说明
+## ⚙️ Settings
 
-插件设置页分为 5 个部分：
+The settings page has 5 sections:
 
-### 1) API 配置
+### 1) API Configuration
 
-- `Configuration` 下拉框：选择当前启用的 API 配置方案
-- `保存/重命名/删除`：管理多套 API 配置，便于在不同服务商之间切换
-- `API Full URL`：完整的 Chat Completions 地址（默认 `https://api.openai.com/v1/chat/completions`）
-- `Model Name`：模型名（默认 `gpt-3.5-turbo`，可改为任意服务端支持的模型名）
-- `API Key`：以 `Authorization: Bearer {API Key}` 方式放在请求头里
-- `测试连接`：用一条测试请求检查端点可用性与返回格式
+- `Configuration` dropdown: select the active API profile
+- `Save/Rename/Delete`: manage multiple API profiles for switching between providers
+- `API Full URL`: full Chat Completions URL (default `https://api.openai.com/v1/chat/completions`)
+- `Model Name`: model name (default `gpt-3.5-turbo`, can be any model supported by your server)
+- `API Key`: sent as `Authorization: Bearer {API Key}`
+- `Test Connection`: sends a test request to check endpoint availability and response format
 
-### 2) 分类 Prompt
+### 2) Collection Prompt
 
-- 自定义指导 LLM 推荐分类的 Prompt
-- 建议只改“分类偏好/规则”，不要要求模型输出解释
-- 插件会在后台追加「输出必须为 JSON」的格式要求（见下文）
+- Customize the prompt to guide the LLM's collection recommendations
+- It's recommended to only adjust “collection preferences/rules”, and not ask the model to output explanations
+- The plugin appends the “output must be JSON” requirement automatically (see below)
 
-### 3) 分类选择
+### 3) Collection Selection
 
-- 勾选：该分类分支会作为候选路径提供给 AI
-- 取消勾选：该分类及其子分类将不会出现在 AI 可选范围里
-- 建议：仅勾选与你当前处理主题相关的分支，能显著降低 Token 成本并提升准确率
+- Checked: this collection branch will be included as candidate paths for the AI
+- Unchecked: this collection and its sub-collections will not be included
+- Recommendation: only check branches relevant to your current topic to significantly reduce token cost and improve accuracy
 
-### 4) 分类行为
+### 4) Collection Behavior
 
-- **处理模式**
-  - 逐篇确认：每篇跑完 AI 就弹出确认框，可中途停止
-  - 批量确认：先对所有选中条目调用 AI，再弹一个汇总窗口统一审核
-- **添加到路径中的所有分类**：是否把 `A/B/C` 同时加入 `A`、`A/B`、`A/B/C`
-- **归档分类名称**：点击“拒绝并移至归档”时使用；没有就自动创建（默认 `未分类`）
+- **Processing mode**
+  - Per-item review: shows a confirmation dialog after each AI call; you can stop midway
+  - Batch review: calls AI for all selected items first, then shows a unified review window
+- **Add to all collections in the path**: whether to add `A/B/C` to `A`, `A/B`, and `A/B/C`
+- **Archive collection name**: used when clicking “Reject & archive”; auto-created if missing (default `未分类`)
 
-### 5) 翻译设置
+### 5) Translation
 
-- `在确认对话框中启用中文标题翻译`：开启后会让模型额外返回 `chineseTitle`，仅用于 UI 展示
+- `Enable Chinese title translation in confirmation dialog`: if enabled, the model returns an extra `chineseTitle` field, only for UI display
 
-## 🔌 API 兼容性与输出格式
+## 🔌 API Compatibility & Output Format
 
-### API 调用方式
+### API call
 
-本插件按 **OpenAI Chat Completions** 的请求/响应结构调用接口：
+This plugin calls the API using the **OpenAI Chat Completions** request/response structure:
 
-- 请求：`POST {API Full URL}`
-- 请求头：`Authorization: Bearer {API Key}`、`Content-Type: application/json`
-- 请求体：`{ model, messages, temperature, max_tokens }`
-- 响应：需要能从 `choices[0].message.content` 取到模型输出文本
+- Request: `POST {API Full URL}`
+- Headers: `Authorization: Bearer {API Key}`, `Content-Type: application/json`
+- Body: `{ model, messages, temperature, max_tokens }`
+- Response: the plugin reads the model output text from `choices[0].message.content`
 
-因此，只要你的服务端**兼容上述结构**（例如 OpenAI 兼容网关/反向代理/部分第三方聚合服务），一般即可使用。
+So as long as your server **is compatible with the structure above** (e.g. an OpenAI-compatible gateway/reverse proxy, or some third-party aggregator services), it should work.
 
-> 注意：如果你的服务商需要 `api-key` 等其它鉴权头，或使用 Responses API 而不是 Chat Completions，本插件目前不支持，需要你通过网关转换或自行改代码适配。
+> Note: if your provider requires other auth headers like `api-key`, or uses the Responses API instead of Chat Completions, this plugin does not currently support it. You’ll need a gateway to adapt the API, or modify the code yourself.
 
-### 输出格式要求（非常重要）
+### Output format (very important)
 
-模型输出必须包含可解析的 JSON（建议输出**纯 JSON**，不要加 Markdown code fence、不要输出解释）。
+The model output must contain parseable JSON (prefer **raw JSON** only: no Markdown code fences, no explanations).
 
-#### 默认模式（未开启中文标题翻译）
+#### Default mode (Chinese title translation disabled)
 
-输出 **JSON 数组**（只能是已存在的完整路径，不能编造新路径）：
-
-```json
-["分类A/子分类B", "分类C"]
-```
-
-#### 翻译模式（开启中文标题翻译）
-
-输出 **JSON 对象**（包含 `collections` 数组与 `chineseTitle` 字段）：
+Output a **JSON array** (must be existing full paths; do not invent new paths):
 
 ```json
-{"collections":["分类A/子分类B"],"chineseTitle":"中文标题"}
+["Collection A/Subcollection B", "Collection C"]
 ```
 
-插件会过滤掉“在 Zotero 里不存在”的路径；如果全部无效，会提示“未找到合适的分类”。
+#### Translation mode (Chinese title translation enabled)
 
-## 🔒 隐私、成本与安全
+Output a **JSON object** (with a `collections` array and a `chineseTitle` field):
 
-- 插件会把：**标题、摘要、候选分类路径列表** 发送给你配置的 LLM 服务端（不会上传 PDF 全文）
-- 这可能涉及隐私/保密信息与 API 调用成本；请自行评估，并优先使用你信任的服务商或自建服务
-- `API Key` 会保存在 Zotero 的偏好设置中；建议不要在共享电脑上使用长期密钥
+```json
+{"collections":["Collection A/Subcollection B"],"chineseTitle":"Chinese title"}
+```
 
-## ❓ 常见问题（FAQ）
+The plugin filters out paths that do not exist in Zotero. If all paths are invalid, it will show “No suitable collections found”.
 
-### 1) 右键菜单里看不到 “AI 智能分类”
+## 🔒 Privacy, Cost & Security
 
-- 确认已安装并启用插件；必要时重启 Zotero
-- 该菜单只会出现在“条目列表”的右键菜单中（不是 PDF 阅读器菜单）
+- The plugin sends **title, abstract, and candidate collection path list** to your configured LLM server (it does not upload full PDF text)
+- This may involve privacy/confidentiality and API cost; please assess carefully, and prefer providers you trust (or self-hosted services)
+- `API Key` is stored in Zotero preferences; avoid using long-lived keys on shared computers
 
-### 2) “测试连接”失败 / 分类时报错
+## ❓ FAQ
 
-- 检查 `API Endpoint` 是否可访问（公司代理/防火墙/网络环境）
-- 检查 `API Key` 是否正确、是否有余额/额度、是否被限流
-- 确认服务端兼容 Chat Completions 返回格式（`choices[0].message.content`）
-- 可在 Zotero 的 `工具 → 开发者 → 错误控制台` 查看更详细错误信息
+### 1) I can’t find “AI Smart Collections” in the right-click menu
 
-### 3) 经常提示 “未找到合适的分类”
+- Make sure the add-on is installed and enabled; restart Zotero if needed
+- This menu only appears in the **item list** context menu (not the PDF reader context menu)
 
-- 你的库中可能没有任何分类（Collections），或在设置里把候选分类都取消勾选了
-- 条目没有摘要会降低效果（插件会用“无摘要”占位）
-- 建议缩小候选分类范围（只勾选相关分支），并优化 Prompt 让模型更“克制”
+### 2) “Test Connection” fails / errors when classifying
 
-### 4) 批量模式会先“全部请求 AI”再让我审核吗？
+- Check whether `API Endpoint` is reachable (proxy/firewall/network environment)
+- Check whether your `API Key` is correct, has enough quota/credits, or is rate-limited
+- Confirm the server returns a Chat Completions compatible response (supports `choices[0].message.content`)
+- Check Zotero’s `Tools → Developer → Error Console` for detailed error messages
 
-是的：批量模式会先对所有选中条目调用 AI，再弹出汇总审核窗口。
+### 3) It often says “No suitable collections found”
 
-## 🛠️ 开发与构建
+- Your library may have no collections, or you unchecked all candidate branches in settings
+- Missing abstracts reduce quality (the plugin uses a “No abstract” placeholder)
+- Narrow the candidate scope (only check relevant branches), and refine your prompt to make the model more conservative
+
+### 4) In batch mode, does it call the AI for everything first and only then let me review?
+
+Yes. Batch mode calls the AI for all selected items first, then shows a summary review window.
+
+## 🛠️ Development & Build
 
 ```bash
 cd zotero-ai-collection
@@ -210,22 +213,29 @@ npm install
 npm run build
 ```
 
-- 构建产物：`builds/zotero-ai-collection.xpi`
-- 开发调试（需本机安装 Zotero）：`npm run start-z7`（或 `npm run start`）
+- Build output: `builds/zotero-ai-collection.xpi`
+- Dev/debug (requires Zotero installed locally): `npm run start-z7` (or `npm run start`)
 
-### Release（可选）
+### Release (Optional)
 
 ```bash
 npm run release
 ```
 
-该命令使用 `release-it`：自动增版本、构建、推送与创建 GitHub Release（需要设置 `GITHUB_TOKEN`）。
+This uses `release-it` to bump versions, build, push, and create a GitHub Release (requires `GITHUB_TOKEN`).
 
 ## 📄 License
 
 AGPL-3.0-or-later. See `LICENSE`.
 
-## 🙏 致谢
+## 🙏 Acknowledgements
 
-- `windingwind/zotero-plugin-template`、`zotero-plugin-toolkit`
-- `zotero-actions-tags`、`zotero-gpt`、`zotero-pdf2zh`
+Thanks to these great projects (in no particular order):
+
+- [windingwind/zotero-plugin-template](https://github.com/windingwind/zotero-plugin-template)
+- [windingwind/zotero-plugin-toolkit](https://github.com/windingwind/zotero-plugin-toolkit)
+- [windingwind/zotero-actions-tags](https://github.com/windingwind/zotero-actions-tags)
+- [MuiseDestiny/zotero-gpt](https://github.com/MuiseDestiny/zotero-gpt)
+- [guaguastandup/zotero-pdf2zh](https://github.com/guaguastandup/zotero-pdf2zh)
+
+Also thanks to everyone who helped test this project and provided feature suggestions.
