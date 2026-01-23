@@ -21,26 +21,51 @@ function getEnabledCollections(): Set<string> {
 }
 
 /**
- * Build collection tree structure as paths (all collections)
- * @param collections - All collections in library
- * @param parentID - Parent collection ID (null for root)
+ * Build collection paths recursively from a single collection
+ * @param collection - The collection to process
  * @param prefix - Path prefix
- * @returns Array of collection paths
+ * @returns Array of collection paths (this collection and all descendants)
+ */
+function buildPathsFromCollection(
+  collection: Zotero.Collection,
+  prefix: string = ""
+): string[] {
+  const path = prefix ? `${prefix}/${collection.name}` : collection.name;
+  let result: string[] = [path];
+
+  // Use getChildCollections() to get actual child collections
+  const children = collection.getChildCollections(false);
+  for (const child of children) {
+    result = result.concat(buildPathsFromCollection(child, path));
+  }
+
+  return result;
+}
+
+/**
+ * Build collection tree structure as paths (all collections)
+ * Uses getChildCollections() for reliable parent-child relationships
+ * @param collections - Top-level collections from getByLibrary()
+ * @param _parentID - Unused, kept for API compatibility
+ * @param _prefix - Unused, kept for API compatibility
+ * @returns Array of all collection paths including nested children
  */
 function buildAllCollectionPaths(
   collections: Zotero.Collection[],
-  parentID: number | null = null,
-  prefix: string = ""
+  _parentID: number | null = null,
+  _prefix: string = ""
 ): string[] {
   let result: string[] = [];
-  const children = collections.filter((c) =>
-    parentID === null ? !c.parentID : c.parentID === parentID
-  );
-  for (const col of children) {
-    const path = prefix ? `${prefix}/${col.name}` : col.name;
-    result.push(path);
-    result = result.concat(buildAllCollectionPaths(collections, col.id, path));
+
+  // collections from getByLibrary() are top-level only
+  // Use getChildCollections() to recursively get all descendants
+  for (const col of collections) {
+    // Only process top-level collections (parentID is false or falsy in Zotero 7)
+    if (!col.parentID) {
+      result = result.concat(buildPathsFromCollection(col, ""));
+    }
   }
+
   return result;
 }
 
@@ -62,11 +87,11 @@ function hasEnabledChildren(path: string, enabledCollections: Set<string>): bool
 
 /**
  * Build collection tree structure as paths, filtered by enabled collections
- * Only returns leaf nodes (paths without enabled children) to avoid redundancy
+ * Returns actual leaf nodes (deepest paths) for each enabled subtree
  * @param collections - All collections in library
  * @param parentID - Parent collection ID (null for root)
  * @param prefix - Path prefix
- * @returns Array of enabled leaf collection paths
+ * @returns Array of leaf collection paths within enabled subtrees
  */
 export function buildCollectionTree(
   collections: Zotero.Collection[],
@@ -76,25 +101,46 @@ export function buildCollectionTree(
   const enabledCollections = getEnabledCollections();
   const allPaths = buildAllCollectionPaths(collections, parentID, prefix);
 
+  // Helper: check if a path is an actual leaf (has no children in allPaths)
+  const isActualLeaf = (path: string): boolean => {
+    const pathPrefix = path + "/";
+    return !allPaths.some((p) => p.startsWith(pathPrefix));
+  };
+
+  // Helper: get all actual leaf descendants of a path (including itself if it's a leaf)
+  const getLeafDescendants = (basePath: string): string[] => {
+    const pathPrefix = basePath + "/";
+    const descendants = allPaths.filter(
+      (p) => p === basePath || p.startsWith(pathPrefix)
+    );
+    return descendants.filter(isActualLeaf);
+  };
+
   // If no enabled collections stored yet (first time), return all leaf nodes
   if (enabledCollections.size === 0) {
-    // Return only paths that don't have children in the list
-    return allPaths.filter(path => {
-      const prefix = path + "/";
-      return !allPaths.some(p => p.startsWith(prefix));
-    });
+    return allPaths.filter(isActualLeaf);
   }
 
-  // Filter to only enabled collections that are leaf nodes
-  // A leaf node is an enabled path that has no enabled children
-  return allPaths.filter(path => {
-    // Must be enabled
+  // For each enabled path without enabled children, expand to its actual leaf descendants
+  const result: Set<string> = new Set();
+
+  for (const path of allPaths) {
     if (!enabledCollections.has(path)) {
-      return false;
+      continue;
     }
-    // Must not have any enabled children (i.e., be a leaf in the enabled set)
-    return !hasEnabledChildren(path, enabledCollections);
-  });
+
+    // Skip paths that have enabled children (they'll be handled when we reach those children)
+    if (hasEnabledChildren(path, enabledCollections)) {
+      continue;
+    }
+
+    // Get all actual leaf descendants and add them
+    for (const leaf of getLeafDescendants(path)) {
+      result.add(leaf);
+    }
+  }
+
+  return Array.from(result);
 }
 
 /**

@@ -57,6 +57,19 @@ ${collectionListStr}
 
 返回 JSON${includeTranslation ? " (包含collections数组和chineseTitle字段)" : " 数组"}:`;
 
+  // Log the full prompt to Error Console for debugging
+  // const win = Zotero.getMainWindow();
+  // if (win && win.console) {
+  //   win.console.log("[AI-Collection] ========== 发送给LLM的完整Prompt ==========");
+  //   win.console.log("[AI-Collection] API URL: " + apiUrl);
+  //   win.console.log("[AI-Collection] Model: " + model);
+  //   win.console.log("[AI-Collection] --- System Prompt ---");
+  //   win.console.log(systemPrompt);
+  //   win.console.log("[AI-Collection] --- User Prompt ---");
+  //   win.console.log(userPrompt);
+  //   win.console.log("[AI-Collection] ================================================");
+  // }
+
   const response = await Zotero.HTTP.request("POST", apiUrl, {
     body: JSON.stringify({
       model: model,
