@@ -277,8 +277,17 @@ async function showClassificationDialog(
   chineseTitle: string | undefined,
   validPaths: string[],
   _allCollections: Zotero.Collection[]
-): Promise<{ action: "confirm" | "reject" | "archive"; selectedPaths: string[] }> {
+): Promise<{ action: "confirm" | "reject" | "archive" | "cancel"; selectedPaths: string[] }> {
   return new Promise((resolve) => {
+    // Track whether the promise has been resolved (to avoid duplicate resolution)
+    let resolved = false;
+    const safeResolve = (result: { action: "confirm" | "reject" | "archive" | "cancel"; selectedPaths: string[] }) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(result);
+      }
+    };
+
     // Track selected paths
     const selectedPaths: Record<string, boolean> = {};
 
@@ -402,17 +411,33 @@ async function showClassificationDialog(
           const selected = Object.entries(selectedPaths)
             .filter(([_, checked]) => checked)
             .map(([path, _]) => path);
-          resolve({ action: "confirm", selectedPaths: selected });
+          safeResolve({ action: "confirm", selectedPaths: selected });
         },
       })
       .addButton(getString("dialog.rejectAndArchive") || "拒绝并移至归档", "archive", {
         callback: () => {
-          resolve({ action: "archive", selectedPaths: [] });
+          safeResolve({ action: "archive", selectedPaths: [] });
         },
       })
       .addButton(getString("dialog.cancel") || "拒绝添加", "cancel", {
         callback: () => {
-          resolve({ action: "reject", selectedPaths: [] });
+          safeResolve({ action: "reject", selectedPaths: [] });
+        },
+      })
+      // Handle window close button (X) - resolve as cancel to stop entire process
+      .setDialogData({
+        loadCallback: () => {
+          // Add unload event listener after window is loaded
+          if (dialogHelper.window) {
+            dialogHelper.window.addEventListener("unload", () => {
+              ztoolkit.log("[AI Classifier] Window unload event triggered");
+              safeResolve({ action: "cancel", selectedPaths: [] });
+            });
+          }
+        },
+        beforeUnloadCallback: () => {
+          ztoolkit.log("[AI Classifier] beforeUnloadCallback triggered, resolved=", resolved);
+          safeResolve({ action: "cancel", selectedPaths: [] });
         },
       })
       .open(getString("dialog.title") || "AI 分类确认", {
@@ -852,6 +877,13 @@ async function classifyItemsOneByOne(
       );
 
       // Handle user's choice
+      ztoolkit.log("[AI Classifier] Dialog result action:", dialogResult.action);
+      if (dialogResult.action === "cancel") {
+        // User clicked window close button - stop entire process
+        ztoolkit.log("[AI Classifier] Cancel detected, breaking loop");
+        break;
+      }
+
       if (dialogResult.action === "reject") {
         continue;
       }
