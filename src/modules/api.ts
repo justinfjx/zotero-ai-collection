@@ -1,12 +1,19 @@
 import { getPref } from "../utils/prefs";
-
-const DEFAULT_PROMPT = "请从给定的分类中选择最合适的 1-3 个分类路径。";
+import { DEFAULT_PROMPT } from "../utils/constants";
 
 // Hidden format instruction - not editable by user
-const FORMAT_INSTRUCTION = `规则：只能选择列表中已存在的完整路径，返回 JSON 数组，如: ["分类A/子分类B"]或["分类A"]`;
+const FORMAT_INSTRUCTION = `规则：只能选择列表中已存在的完整路径，返回 JSON 数组。
+示例格式：
+- 单个路径: ["分类A/子分类B"]
+- 多个路径: ["分类A/子分类B", "分类C/子分类D", "分类E"]
+- 无合适分类: []`;
 
 // Hidden translation instruction - appended when translation is enabled
-const TRANSLATION_INSTRUCTION = `另外，请将文献标题翻译成中文，在返回的JSON中增加一个"chineseTitle"字段。返回格式: {"collections": ["分类A"], "chineseTitle": "中文标题"}`;
+const TRANSLATION_INSTRUCTION = `另外，请将文献标题翻译成中文，在返回的JSON中增加一个"chineseTitle"字段。
+返回格式示例：
+- 单个路径: {"collections": ["分类A"], "chineseTitle": "中文标题"}
+- 多个路径: {"collections": ["分类A/子分类B", "分类C"], "chineseTitle": "中文标题"}
+- 无合适分类: {"collections": [], "chineseTitle": "中文标题"}`;
 
 /**
  * Call AI API for classification
@@ -36,10 +43,10 @@ export async function callAI(
     .join("\n");
 
   // Build system prompt with user-editable part and hidden format instruction
-  let systemPrompt = `你是一个学术文献分类助手。${customPrompt}\n${FORMAT_INSTRUCTION}`;
+  let systemPrompt = `${customPrompt}\n${FORMAT_INSTRUCTION}`;
 
   if (includeTranslation) {
-    systemPrompt = `你是一个学术文献分类助手。${customPrompt}\n${TRANSLATION_INSTRUCTION}`;
+    systemPrompt = `${customPrompt}\n${TRANSLATION_INSTRUCTION}`;
   }
 
   const userPrompt = `标题: ${title}

@@ -2,8 +2,7 @@ import { config } from "../../package.json";
 import { getString } from "../utils/locale";
 import { testConnection } from "./api";
 import { getPref, setPref } from "../utils/prefs";
-
-const DEFAULT_PROMPT = "请从给定的分类中选择最合适的 1-3 个分类路径。";
+import { DEFAULT_PROMPT } from "../utils/constants";
 
 interface ApiConfig {
   name: string;
