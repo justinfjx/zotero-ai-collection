@@ -117,6 +117,48 @@
   </groupbox>
 
   <groupbox>
+    <label><html:h2>Collection Selection</html:h2></label>
+    <vbox style="margin: 10px 0;">
+      <html:label style="margin-bottom: 5px; color: #666; font-size: 12px;">
+        Select which collections are available for AI classification:
+      </html:label>
+      <hbox style="margin-bottom: 8px;">
+        <button
+          id="zotero-prefpane-__addonRef__-selectAll"
+          label="Select All"
+        />
+        <button
+          id="zotero-prefpane-__addonRef__-deselectAll"
+          label="Deselect All"
+          style="margin-left: 5px;"
+        />
+        <button
+          id="zotero-prefpane-__addonRef__-refreshCollections"
+          label="Refresh"
+          style="margin-left: 5px;"
+        />
+      </hbox>
+      <html:div
+        id="zotero-prefpane-__addonRef__-collectionTree"
+        style="
+          border: 1px solid var(--fill-quinary);
+          border-radius: 4px;
+          padding: 8px;
+          max-height: 200px;
+          overflow-y: auto;
+          font-family: system-ui, -apple-system, sans-serif;
+          font-size: 13px;
+        "
+      >
+        <html:div style="color: #999;">Loading collections...</html:div>
+      </html:div>
+      <html:label style="margin-top: 5px; color: #888; font-size: 11px;">
+        Unchecked collections will not be provided to AI for selection.
+      </html:label>
+    </vbox>
+  </groupbox>
+
+  <groupbox>
     <label><html:h2>Translation Settings</html:h2></label>
     <vbox style="margin: 10px 0;">
       <hbox align="center">

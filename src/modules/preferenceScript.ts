@@ -12,6 +12,14 @@ interface ApiConfig {
   apiKey: string;
 }
 
+interface CollectionNode {
+  id: number;
+  name: string;
+  path: string;
+  children: CollectionNode[];
+  parentID: number | null;
+}
+
 export function registerPrefsScripts(_window: Window) {
   if (!addon.data.prefs) {
     addon.data.prefs = {
@@ -66,6 +74,9 @@ function initPrefsUI() {
 
   // Initialize config selector
   refreshConfigList();
+
+  // Initialize collection tree
+  loadCollectionTree();
 }
 
 function getApiConfigs(): ApiConfig[] {
@@ -343,4 +354,353 @@ function bindPrefEvents() {
         win.alert(getString("prefs.promptReset") || "Prompt reset to default!");
       }
     });
+
+  // Collection selection buttons
+  doc
+    .querySelector(`#zotero-prefpane-${config.addonRef}-selectAll`)
+    ?.addEventListener("click", () => {
+      selectAllCollections();
+    });
+
+  doc
+    .querySelector(`#zotero-prefpane-${config.addonRef}-deselectAll`)
+    ?.addEventListener("click", () => {
+      deselectAllCollections();
+    });
+
+  doc
+    .querySelector(`#zotero-prefpane-${config.addonRef}-refreshCollections`)
+    ?.addEventListener("click", () => {
+      loadCollectionTree();
+    });
+}
+
+// ==================== Collection Tree Functions ====================
+
+/**
+ * Get enabled collection paths from preferences
+ */
+function getEnabledCollections(): string[] {
+  try {
+    const enabledJson = getPref("enabledCollections") as string;
+    if (!enabledJson || enabledJson === "undefined") {
+      return [];
+    }
+    return JSON.parse(enabledJson);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Save enabled collection paths to preferences
+ */
+function setEnabledCollections(paths: string[]) {
+  setPref("enabledCollections", JSON.stringify(paths));
+}
+
+/**
+ * Build collection tree structure from a single collection and its children
+ */
+function buildCollectionNodeFromCollection(
+  collection: Zotero.Collection,
+  prefix: string = ""
+): CollectionNode {
+  const path = prefix ? `${prefix}/${collection.name}` : collection.name;
+  const childCollections = collection.getChildCollections(false);
+
+  const node: CollectionNode = {
+    id: collection.id,
+    name: collection.name,
+    path: path,
+    parentID: collection.parentID || null,
+    children: childCollections.map(child =>
+      buildCollectionNodeFromCollection(child, path)
+    ),
+  };
+
+  return node;
+}
+
+/**
+ * Build collection tree structure from Zotero collections
+ * Uses getChildCollections() method for reliable parent-child relationships
+ */
+function buildCollectionNodes(
+  collections: Zotero.Collection[]
+): CollectionNode[] {
+  // Find top-level collections (those without a parent)
+  const topLevelCollections = collections.filter((c) => !c.parentID);
+
+  return topLevelCollections.map(col =>
+    buildCollectionNodeFromCollection(col, "")
+  );
+}
+
+/**
+ * Get all paths from collection tree (flattened)
+ */
+function getAllPaths(nodes: CollectionNode[]): string[] {
+  let paths: string[] = [];
+  for (const node of nodes) {
+    paths.push(node.path);
+    paths = paths.concat(getAllPaths(node.children));
+  }
+  return paths;
+}
+
+/**
+ * Get all descendant paths of a given path
+ */
+function getDescendantPaths(nodes: CollectionNode[], targetPath: string): string[] {
+  for (const node of nodes) {
+    if (node.path === targetPath) {
+      return getAllPaths(node.children);
+    }
+    const found = getDescendantPaths(node.children, targetPath);
+    if (found.length > 0 || node.children.some(c => c.path === targetPath)) {
+      return found;
+    }
+  }
+  return [];
+}
+
+/**
+ * Get all ancestor paths of a given path
+ */
+function getAncestorPaths(path: string): string[] {
+  const parts = path.split("/");
+  const ancestors: string[] = [];
+  let current = "";
+  for (let i = 0; i < parts.length - 1; i++) {
+    current = current ? `${current}/${parts[i]}` : parts[i];
+    ancestors.push(current);
+  }
+  return ancestors;
+}
+
+// Store collection tree globally for the preference window
+let collectionTree: CollectionNode[] = [];
+let allCollectionPaths: string[] = [];
+
+/**
+ * Load and render collection tree
+ */
+function loadCollectionTree() {
+  const win = addon.data.prefs!.window;
+  const doc = win.document;
+  const container = doc.querySelector(
+    `#zotero-prefpane-${config.addonRef}-collectionTree`
+  ) as HTMLDivElement;
+
+  if (!container) return;
+
+  // Clear container safely
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+
+  try {
+    // Get collections from the user's library
+    const libraryID = Zotero.Libraries.userLibraryID;
+    const collections = Zotero.Collections.getByLibrary(libraryID);
+
+    // Build tree structure
+    collectionTree = buildCollectionNodes(collections);
+    allCollectionPaths = getAllPaths(collectionTree);
+
+    // Get enabled collections (default all enabled if empty)
+    let enabledPaths = getEnabledCollections();
+    if (enabledPaths.length === 0 && allCollectionPaths.length > 0) {
+      // First time: enable all collections
+      enabledPaths = [...allCollectionPaths];
+      setEnabledCollections(enabledPaths);
+    }
+
+    // Clean up stale paths (collections that no longer exist)
+    const validEnabledPaths = enabledPaths.filter(p => allCollectionPaths.includes(p));
+
+    // Add new collections (that weren't in preferences before)
+    const newPaths = allCollectionPaths.filter(p => !enabledPaths.includes(p) && !validEnabledPaths.includes(p));
+    const finalEnabledPaths = [...validEnabledPaths, ...newPaths];
+
+    if (finalEnabledPaths.length !== enabledPaths.length) {
+      setEnabledCollections(finalEnabledPaths);
+    }
+
+    // Render the tree
+    renderCollectionTree(container, collectionTree, new Set(finalEnabledPaths));
+  } catch (e: any) {
+    const errorDiv = doc.createElement("div") as HTMLDivElement;
+    errorDiv.style.color = "#c62828";
+    errorDiv.textContent = `Error loading collections: ${e.message}`;
+    container.appendChild(errorDiv);
+  }
+}
+
+/**
+ * Render collection tree to container
+ */
+function renderCollectionTree(
+  container: HTMLDivElement,
+  nodes: CollectionNode[],
+  enabledPaths: Set<string>,
+  level: number = 0
+) {
+  const doc = container.ownerDocument;
+
+  if (level === 0 && nodes.length === 0) {
+    const emptyDiv = doc.createElement("div") as HTMLDivElement;
+    emptyDiv.style.color = "#999";
+    emptyDiv.textContent = "No collections found in library.";
+    container.appendChild(emptyDiv);
+    return;
+  }
+
+  for (const node of nodes) {
+    const hasChildren = node.children.length > 0;
+    const isEnabled = enabledPaths.has(node.path);
+
+    // Create node container
+    const nodeDiv = doc.createElement("div") as HTMLDivElement;
+    nodeDiv.setAttribute("data-path", node.path);
+    nodeDiv.style.cssText = `margin-left: ${level * 20}px; margin-bottom: 2px;`;
+
+    // Create header row (toggle + checkbox + name)
+    const headerDiv = doc.createElement("div") as HTMLDivElement;
+    headerDiv.style.cssText = "display: flex; align-items: center; padding: 2px 0;";
+
+    // Toggle button for folders with children
+    const toggleSpan = doc.createElement("span") as HTMLSpanElement;
+    toggleSpan.style.cssText = "width: 16px; cursor: pointer; user-select: none; font-size: 10px; opacity: 0.7;";
+    if (hasChildren) {
+      toggleSpan.textContent = "▶";
+      toggleSpan.setAttribute("data-expanded", "false");
+      toggleSpan.addEventListener("click", () => {
+        const expanded = toggleSpan.getAttribute("data-expanded") === "true";
+        toggleSpan.setAttribute("data-expanded", String(!expanded));
+        toggleSpan.textContent = expanded ? "▶" : "▼";
+        const childrenContainer = nodeDiv.querySelector(".children-container") as HTMLDivElement;
+        if (childrenContainer) {
+          childrenContainer.style.display = expanded ? "none" : "block";
+        }
+      });
+    } else {
+      toggleSpan.textContent = " ";
+    }
+    headerDiv.appendChild(toggleSpan);
+
+    // Checkbox
+    const checkbox = doc.createElement("input") as HTMLInputElement;
+    checkbox.type = "checkbox";
+    checkbox.checked = isEnabled;
+    checkbox.setAttribute("data-path", node.path);
+    checkbox.style.cssText = "margin: 0 5px 0 0; cursor: pointer;";
+    checkbox.addEventListener("change", () => {
+      handleCheckboxChange(node.path, checkbox.checked);
+    });
+    headerDiv.appendChild(checkbox);
+
+    // Folder icon and name
+    const nameSpan = doc.createElement("span") as HTMLSpanElement;
+    nameSpan.style.cssText = "cursor: default;";
+    nameSpan.textContent = `${hasChildren ? "📂" : "📁"} ${node.name}`;
+    headerDiv.appendChild(nameSpan);
+
+    nodeDiv.appendChild(headerDiv);
+
+    // Children container (initially collapsed)
+    if (hasChildren) {
+      const childrenContainer = doc.createElement("div") as HTMLDivElement;
+      childrenContainer.className = "children-container";
+      childrenContainer.style.display = "none";
+      nodeDiv.appendChild(childrenContainer);
+
+      // Recursively render children
+      renderCollectionTree(childrenContainer, node.children, enabledPaths, level + 1);
+    }
+
+    container.appendChild(nodeDiv);
+  }
+}
+
+/**
+ * Handle checkbox change with parent-child cascading logic
+ */
+function handleCheckboxChange(path: string, checked: boolean) {
+  const win = addon.data.prefs!.window;
+  const doc = win.document;
+
+  let enabledPaths = new Set(getEnabledCollections());
+
+  if (checked) {
+    // When checking: enable this path and all ancestors
+    enabledPaths.add(path);
+
+    // Enable all ancestors to ensure path integrity
+    const ancestors = getAncestorPaths(path);
+    for (const ancestor of ancestors) {
+      enabledPaths.add(ancestor);
+    }
+
+    // Enable all descendants
+    const descendants = getDescendantPaths(collectionTree, path);
+    for (const desc of descendants) {
+      enabledPaths.add(desc);
+    }
+  } else {
+    // When unchecking: disable this path and all descendants
+    enabledPaths.delete(path);
+
+    // Disable all descendants
+    const descendants = getDescendantPaths(collectionTree, path);
+    for (const desc of descendants) {
+      enabledPaths.delete(desc);
+    }
+  }
+
+  // Save to preferences
+  setEnabledCollections(Array.from(enabledPaths));
+
+  // Update UI checkboxes
+  updateCheckboxStates(doc, enabledPaths);
+}
+
+/**
+ * Update all checkbox states in the UI
+ */
+function updateCheckboxStates(doc: Document, enabledPaths: Set<string>) {
+  const checkboxes = doc.querySelectorAll(
+    `#zotero-prefpane-${config.addonRef}-collectionTree input[type="checkbox"]`
+  );
+
+  checkboxes.forEach((cb) => {
+    const checkbox = cb as HTMLInputElement;
+    const path = checkbox.getAttribute("data-path");
+    if (path) {
+      checkbox.checked = enabledPaths.has(path);
+    }
+  });
+}
+
+/**
+ * Select all collections
+ */
+function selectAllCollections() {
+  const win = addon.data.prefs!.window;
+  const doc = win.document;
+
+  setEnabledCollections([...allCollectionPaths]);
+  updateCheckboxStates(doc, new Set(allCollectionPaths));
+}
+
+/**
+ * Deselect all collections
+ */
+function deselectAllCollections() {
+  const win = addon.data.prefs!.window;
+  const doc = win.document;
+
+  setEnabledCollections([]);
+  updateCheckboxStates(doc, new Set());
 }

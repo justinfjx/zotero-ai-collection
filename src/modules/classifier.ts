@@ -6,13 +6,28 @@ import { getPref } from "../utils/prefs";
 const PATH_SEPARATOR = "/";
 
 /**
- * Build collection tree structure as paths
+ * Get enabled collection paths from preferences
+ */
+function getEnabledCollections(): Set<string> {
+  try {
+    const enabledJson = getPref("enabledCollections") as string;
+    if (!enabledJson || enabledJson === "undefined") {
+      return new Set(); // Empty set means all enabled (first time use)
+    }
+    return new Set(JSON.parse(enabledJson));
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Build collection tree structure as paths (all collections)
  * @param collections - All collections in library
  * @param parentID - Parent collection ID (null for root)
  * @param prefix - Path prefix
  * @returns Array of collection paths
  */
-export function buildCollectionTree(
+function buildAllCollectionPaths(
   collections: Zotero.Collection[],
   parentID: number | null = null,
   prefix: string = ""
@@ -24,9 +39,33 @@ export function buildCollectionTree(
   for (const col of children) {
     const path = prefix ? `${prefix}/${col.name}` : col.name;
     result.push(path);
-    result = result.concat(buildCollectionTree(collections, col.id, path));
+    result = result.concat(buildAllCollectionPaths(collections, col.id, path));
   }
   return result;
+}
+
+/**
+ * Build collection tree structure as paths, filtered by enabled collections
+ * @param collections - All collections in library
+ * @param parentID - Parent collection ID (null for root)
+ * @param prefix - Path prefix
+ * @returns Array of enabled collection paths
+ */
+export function buildCollectionTree(
+  collections: Zotero.Collection[],
+  parentID: number | null = null,
+  prefix: string = ""
+): string[] {
+  const enabledCollections = getEnabledCollections();
+  const allPaths = buildAllCollectionPaths(collections, parentID, prefix);
+
+  // If no enabled collections stored yet (first time), return all
+  if (enabledCollections.size === 0) {
+    return allPaths;
+  }
+
+  // Filter to only enabled collections
+  return allPaths.filter(path => enabledCollections.has(path));
 }
 
 /**
