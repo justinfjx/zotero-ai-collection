@@ -1,4 +1,4 @@
-<!ENTITY zotero.__addonRef__.pref.title "AI 分类设置">
+<!ENTITY zotero.__addonRef__.pref.title "Collection">
 <!ENTITY zotero.__addonRef__.pref.apiUrl "API 端点">
 <!ENTITY zotero.__addonRef__.pref.model "模型名称">
 <!ENTITY zotero.__addonRef__.pref.apiKey "API 密钥">

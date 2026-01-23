@@ -1,4 +1,4 @@
-<!ENTITY zotero.__addonRef__.pref.title "AI Collection Settings">
+<!ENTITY zotero.__addonRef__.pref.title "Collection">
 <!ENTITY zotero.__addonRef__.pref.apiUrl "API Endpoint">
 <!ENTITY zotero.__addonRef__.pref.model "Model Name">
 <!ENTITY zotero.__addonRef__.pref.apiKey "API Key">

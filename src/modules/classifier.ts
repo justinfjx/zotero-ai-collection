@@ -183,8 +183,8 @@ export function getCollectionByPath(
   // Navigate through the rest of the path using getChildCollections()
   for (let i = 1; i < parts.length; i++) {
     const nameToFind = parts[i].toLowerCase();
-    const children = targetCollection.getChildCollections(false);
-    const match = children.find((c) => c.name.toLowerCase() === nameToFind);
+    const children: Zotero.Collection[] = targetCollection!.getChildCollections(false);
+    const match: Zotero.Collection | undefined = children.find((c: Zotero.Collection) => c.name.toLowerCase() === nameToFind);
 
     if (match) {
       targetCollection = match;

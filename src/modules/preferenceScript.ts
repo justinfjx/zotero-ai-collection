@@ -181,14 +181,14 @@ function refreshConfigList() {
   const currentName = (getPref("currentConfigName") as string) || "Default";
 
   // Add "Default" option
-  const defaultItem = doc.createXULElement("menuitem");
+  const defaultItem = (doc as any).createXULElement("menuitem");
   defaultItem.setAttribute("label", "Default");
   defaultItem.setAttribute("value", "Default");
   popup.appendChild(defaultItem);
 
   // Add saved configs
   for (const cfg of configs) {
-    const item = doc.createXULElement("menuitem");
+    const item = (doc as any).createXULElement("menuitem");
     item.setAttribute("label", cfg.name);
     item.setAttribute("value", cfg.name);
     popup.appendChild(item);

@@ -1,9 +1,9 @@
 {
   "addons": {
-    "zotero-ai-collection@example.com": {
+    "zotero-ai-collection@jiaxin.fan": {
       "updates": [
         {
-          "version": "1.0.0",
+          "version": "0.0.1",
           "update_link": "https://github.com/justinfjx/zotero-ai-collection/releases/latest/download/zotero-ai-collection.xpi",
           "applications": {
             "gecko": {
@@ -12,7 +12,7 @@
           }
         },
         {
-          "version": "1.0.0",
+          "version": "0.0.1",
           "update_link": "https://github.com/justinfjx/zotero-ai-collection/releases/latest/download/zotero-ai-collection.xpi",
           "applications": {
             "zotero": {

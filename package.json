@@ -1,10 +1,10 @@
 {
   "name": "zotero-ai-collection",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "AI-powered literature classification for Zotero",
   "config": {
-    "addonName": "Zotero AI Collection",
-    "addonID": "zotero-ai-collection@example.com",
+    "addonName": "Collection for Zotero",
+    "addonID": "zotero-ai-collection@jiaxin.fan",
     "addonRef": "zoteroaicollection",
     "addonInstance": "ZoteroAICollection",
     "prefsPrefix": "extensions.zotero.zoteroaicollection",
