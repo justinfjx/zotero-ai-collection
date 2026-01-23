@@ -45,11 +45,28 @@ function buildAllCollectionPaths(
 }
 
 /**
+ * Check if a path has any enabled children
+ * @param path - The path to check
+ * @param enabledCollections - Set of enabled collection paths
+ * @returns true if the path has enabled children
+ */
+function hasEnabledChildren(path: string, enabledCollections: Set<string>): boolean {
+  const prefix = path + "/";
+  for (const enabledPath of enabledCollections) {
+    if (enabledPath.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Build collection tree structure as paths, filtered by enabled collections
+ * Only returns leaf nodes (paths without enabled children) to avoid redundancy
  * @param collections - All collections in library
  * @param parentID - Parent collection ID (null for root)
  * @param prefix - Path prefix
- * @returns Array of enabled collection paths
+ * @returns Array of enabled leaf collection paths
  */
 export function buildCollectionTree(
   collections: Zotero.Collection[],
@@ -59,13 +76,25 @@ export function buildCollectionTree(
   const enabledCollections = getEnabledCollections();
   const allPaths = buildAllCollectionPaths(collections, parentID, prefix);
 
-  // If no enabled collections stored yet (first time), return all
+  // If no enabled collections stored yet (first time), return all leaf nodes
   if (enabledCollections.size === 0) {
-    return allPaths;
+    // Return only paths that don't have children in the list
+    return allPaths.filter(path => {
+      const prefix = path + "/";
+      return !allPaths.some(p => p.startsWith(prefix));
+    });
   }
 
-  // Filter to only enabled collections
-  return allPaths.filter(path => enabledCollections.has(path));
+  // Filter to only enabled collections that are leaf nodes
+  // A leaf node is an enabled path that has no enabled children
+  return allPaths.filter(path => {
+    // Must be enabled
+    if (!enabledCollections.has(path)) {
+      return false;
+    }
+    // Must not have any enabled children (i.e., be a leaf in the enabled set)
+    return !hasEnabledChildren(path, enabledCollections);
+  });
 }
 
 /**
@@ -268,12 +297,30 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
       }
 
       // Add to selected collections
+      // Check user preference: add to leaf only or all path collections
+      const addToAllPath = getPref("addToAllPathCollections") as boolean;
+
       for (const path of dialogResult.selectedPaths) {
-        const collection = getCollectionByPath(path, allCollections);
-        if (collection) {
-          const added = await safeAddToCollection(collection, currentItem.id);
-          if (added) {
-            totalAdded++;
+        if (addToAllPath) {
+          // Add to all collections in the path (A, A/b, A/b/c)
+          const hierarchicalPaths = getHierarchicalPaths(path);
+          for (const partialPath of hierarchicalPaths) {
+            const collection = getCollectionByPath(partialPath, allCollections);
+            if (collection) {
+              const added = await safeAddToCollection(collection, currentItem.id);
+              if (added) {
+                totalAdded++;
+              }
+            }
+          }
+        } else {
+          // Add to leaf collection only (just c in A/b/c)
+          const collection = getCollectionByPath(path, allCollections);
+          if (collection) {
+            const added = await safeAddToCollection(collection, currentItem.id);
+            if (added) {
+              totalAdded++;
+            }
           }
         }
       }
