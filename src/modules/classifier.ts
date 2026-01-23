@@ -145,8 +145,9 @@ export function buildCollectionTree(
 
 /**
  * Get collection by path string
+ * Uses getChildCollections() to find nested collections
  * @param pathStr - Collection path like "Parent/Child"
- * @param allCollections - All collections in library
+ * @param allCollections - Top-level collections from getByLibrary()
  * @returns Collection object or null
  */
 export function getCollectionByPath(
@@ -154,23 +155,31 @@ export function getCollectionByPath(
   allCollections: Zotero.Collection[]
 ): Zotero.Collection | null {
   const parts = pathStr.split(PATH_SEPARATOR);
-  let currentParentID: number | undefined = undefined;
   let targetCollection: Zotero.Collection | null = null;
 
-  for (let i = 0; i < parts.length; i++) {
+  // Find the first part in top-level collections
+  const firstPart = parts[0].toLowerCase();
+  targetCollection = allCollections.find(
+    (c) => c.name.toLowerCase() === firstPart && !c.parentID
+  ) || null;
+
+  if (!targetCollection) {
+    return null;
+  }
+
+  // Navigate through the rest of the path using getChildCollections()
+  for (let i = 1; i < parts.length; i++) {
     const nameToFind = parts[i].toLowerCase();
-    const match = allCollections.find(
-      (c) =>
-        c.name.toLowerCase() === nameToFind &&
-        (i === 0 ? !c.parentID : c.parentID === currentParentID)
-    );
+    const children = targetCollection.getChildCollections(false);
+    const match = children.find((c) => c.name.toLowerCase() === nameToFind);
+
     if (match) {
-      currentParentID = match.id;
       targetCollection = match;
     } else {
       return null;
     }
   }
+
   return targetCollection;
 }
 

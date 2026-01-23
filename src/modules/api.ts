@@ -58,17 +58,14 @@ ${collectionListStr}
 返回 JSON${includeTranslation ? " (包含collections数组和chineseTitle字段)" : " 数组"}:`;
 
   // Log the full prompt to Error Console for debugging
-  // const win = Zotero.getMainWindow();
-  // if (win && win.console) {
-  //   win.console.log("[AI-Collection] ========== 发送给LLM的完整Prompt ==========");
-  //   win.console.log("[AI-Collection] API URL: " + apiUrl);
-  //   win.console.log("[AI-Collection] Model: " + model);
-  //   win.console.log("[AI-Collection] --- System Prompt ---");
-  //   win.console.log(systemPrompt);
-  //   win.console.log("[AI-Collection] --- User Prompt ---");
-  //   win.console.log(userPrompt);
-  //   win.console.log("[AI-Collection] ================================================");
-  // }
+  // Zotero.log("[AI-Collection] ========== 发送给LLM的完整Prompt ==========");
+  // Zotero.log("[AI-Collection] API URL: " + apiUrl);
+  // Zotero.log("[AI-Collection] Model: " + model);
+  // Zotero.log("[AI-Collection] --- System Prompt ---");
+  // Zotero.log(systemPrompt);
+  // Zotero.log("[AI-Collection] --- User Prompt ---");
+  // Zotero.log(userPrompt);
+  // Zotero.log("[AI-Collection] ================================================");
 
   const response = await Zotero.HTTP.request("POST", apiUrl, {
     body: JSON.stringify({
@@ -89,6 +86,11 @@ ${collectionListStr}
   });
 
   const content = response.response.choices[0].message.content.trim();
+
+  // Log the model's output to Error Console
+  // Zotero.log("[AI-Collection] ========== LLM返回结果 ==========");
+  // Zotero.log(content);
+  // Zotero.log("[AI-Collection] ================================");
 
   if (includeTranslation) {
     // Parse JSON object with collections and chineseTitle
