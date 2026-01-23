@@ -484,7 +484,22 @@ let collectionTree: CollectionNode[] = [];
 let allCollectionPaths: string[] = [];
 
 /**
- * Load and render collection tree
+ * Check if collections have been initialized before
+ */
+function isCollectionsInitialized(): boolean {
+  const initialized = getPref("collectionsInitialized") as string;
+  return initialized === "true";
+}
+
+/**
+ * Mark collections as initialized
+ */
+function markCollectionsInitialized() {
+  setPref("collectionsInitialized", "true");
+}
+
+/**
+ * Load and render collection tree (preserves user selections)
  */
 function loadCollectionTree() {
   const win = addon.data.prefs!.window;
@@ -509,27 +524,27 @@ function loadCollectionTree() {
     collectionTree = buildCollectionNodes(collections);
     allCollectionPaths = getAllPaths(collectionTree);
 
-    // Get enabled collections (default all enabled if empty)
     let enabledPaths = getEnabledCollections();
-    if (enabledPaths.length === 0 && allCollectionPaths.length > 0) {
-      // First time: enable all collections
+
+    // First time initialization: enable all collections
+    if (!isCollectionsInitialized() && allCollectionPaths.length > 0) {
       enabledPaths = [...allCollectionPaths];
       setEnabledCollections(enabledPaths);
+      markCollectionsInitialized();
+    } else {
+      // Clean up stale paths (collections that no longer exist)
+      const validEnabledPaths = enabledPaths.filter(p => allCollectionPaths.includes(p));
+
+      // Only update if paths were removed (don't add new paths automatically)
+      if (validEnabledPaths.length !== enabledPaths.length) {
+        setEnabledCollections(validEnabledPaths);
+      }
+
+      enabledPaths = validEnabledPaths;
     }
 
-    // Clean up stale paths (collections that no longer exist)
-    const validEnabledPaths = enabledPaths.filter(p => allCollectionPaths.includes(p));
-
-    // Add new collections (that weren't in preferences before)
-    const newPaths = allCollectionPaths.filter(p => !enabledPaths.includes(p) && !validEnabledPaths.includes(p));
-    const finalEnabledPaths = [...validEnabledPaths, ...newPaths];
-
-    if (finalEnabledPaths.length !== enabledPaths.length) {
-      setEnabledCollections(finalEnabledPaths);
-    }
-
-    // Render the tree
-    renderCollectionTree(container, collectionTree, new Set(finalEnabledPaths));
+    // Render the tree with preserved user selections
+    renderCollectionTree(container, collectionTree, new Set(enabledPaths));
   } catch (e: any) {
     const errorDiv = doc.createElement("div") as HTMLDivElement;
     errorDiv.style.color = "#c62828";
