@@ -2,7 +2,9 @@ import process from "process";
 import { execSync } from "child_process";
 import { exit } from "process";
 import minimist from "minimist";
-import cmd from "./zotero-cmd.json" assert { type: "json" };
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const cmd = require("./zotero-cmd.json");
 const { exec } = cmd;
 
 // Run node start.js -h for help

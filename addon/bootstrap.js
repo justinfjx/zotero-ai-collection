@@ -1,5 +1,5 @@
 /**
- * Bootstrap entry point for Zotero 7 plugin
+ * Bootstrap entry point for Zotero 7/8 plugin
  * Based on Zotero team's official Make It Red example
  * https://github.com/zotero/make-it-red
  * https://www.zotero.org/support/dev/zotero_7_for_developers
@@ -11,18 +11,24 @@ if (typeof Zotero == "undefined") {
 
 var chromeHandle;
 
-// In Zotero 6, bootstrap methods are called before Zotero is initialized, and using include.js
-// to get the Zotero XPCOM service would risk breaking Zotero startup. Instead, wait for the main
-// Zotero window to open and get the Zotero object from there.
-//
-// In Zotero 7, bootstrap methods are not called until Zotero is initialized, and the 'Zotero' is
-// automatically made available.
+// Import Services module - compatible with both Zotero 7 and Zotero 8
+var Services;
+try {
+  // Zotero 8 (Firefox 128+) uses importESModule
+  Services = ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs").default;
+} catch (e) {
+  // Fallback for Zotero 7
+  Services = ChromeUtils.import("resource://gre/modules/Services.jsm").Services;
+}
+
+// In Zotero 7+, bootstrap methods are not called until Zotero is initialized,
+// and the 'Zotero' is automatically made available.
 async function waitForZotero() {
   if (typeof Zotero != "undefined") {
     await Zotero.initializationPromise;
+    return;
   }
 
-  var { Services } = ChromeUtils.import("resource://gre/modules/Services.jsm");
   var windows = Services.wm.getEnumerator("navigator:browser");
   var found = false;
   while (windows.hasMoreElements()) {
@@ -111,13 +117,18 @@ function shutdown({ id, version, resourceURI, rootURI }, reason) {
       Components.interfaces.nsISupports
     ).wrappedJSObject;
   }
-  Zotero.__addonInstance__.hooks.onShutdown();
+
+  // Call plugin shutdown hook if available
+  if (Zotero.__addonInstance__?.hooks?.onShutdown) {
+    Zotero.__addonInstance__.hooks.onShutdown();
+  }
 
   Cc["@mozilla.org/intl/stringbundle;1"]
     .getService(Components.interfaces.nsIStringBundleService)
     .flushBundles();
 
-  Cu.unload(`${rootURI}/chrome/content/scripts/index.js`);
+  // Cu.unload is removed in Zotero 8, and not needed for loadSubScript
+  // Scripts loaded via loadSubScript are automatically cleaned up
 
   if (chromeHandle) {
     chromeHandle.destruct();

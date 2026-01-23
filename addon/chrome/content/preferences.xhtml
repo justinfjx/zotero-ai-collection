@@ -5,7 +5,36 @@
   <groupbox>
     <label><html:h2>AI Collection Settings</html:h2></label>
 
+    <!-- API Configuration Selector -->
     <vbox style="margin: 10px 0;">
+      <hbox align="center" style="margin-bottom: 8px;">
+        <html:label for="zotero-prefpane-__addonRef__-configSelect" style="width: 120px;"
+          >Configuration</html:label
+        >
+        <menulist
+          id="zotero-prefpane-__addonRef__-configSelect"
+          style="flex: 1; min-width: 200px;"
+        >
+          <menupopup id="zotero-prefpane-__addonRef__-configPopup">
+          </menupopup>
+        </menulist>
+        <button
+          id="zotero-prefpane-__addonRef__-saveConfig"
+          label="Save Config"
+          style="margin-left: 5px;"
+        />
+        <button
+          id="zotero-prefpane-__addonRef__-renameConfig"
+          label="Rename"
+          style="margin-left: 5px;"
+        />
+        <button
+          id="zotero-prefpane-__addonRef__-deleteConfig"
+          label="Delete"
+          style="margin-left: 5px;"
+        />
+      </hbox>
+
       <hbox align="center" style="margin-bottom: 8px;">
         <html:label for="zotero-prefpane-__addonRef__-apiUrl" style="width: 120px;"
           >API Endpoint</html:label
@@ -40,16 +69,66 @@
           preference="__prefsPrefix__.apiKey"
           style="flex: 1; min-width: 300px;"
         />
+        <html:button
+          id="zotero-prefpane-__addonRef__-toggleApiKey"
+          style="margin-left: 5px; width: 30px; height: 24px; cursor: pointer; font-size: 14px;"
+          title="Toggle API Key visibility"
+        >&#128065;</html:button>
       </hbox>
 
-      <hbox style="margin-top: 10px;">
+      <hbox style="margin-top: 10px; align-items: flex-start;">
         <button
           id="zotero-prefpane-__addonRef__-test"
           label="Test Connection"
         />
       </hbox>
+      <hbox style="margin-top: 5px;">
+        <html:div
+          id="zotero-prefpane-__addonRef__-testResult"
+          style="font-size: 12px; padding: 5px; min-height: 20px; color: #666;"
+        ></html:div>
+      </hbox>
     </vbox>
   </groupbox>
+
+  <groupbox>
+    <label><html:h2>Classification Prompt</html:h2></label>
+    <vbox style="margin: 10px 0;">
+      <html:label style="margin-bottom: 5px; color: #666; font-size: 12px;">
+        Customize the prompt that guides LLM to recommend classifications (do not change the output format requirement):
+      </html:label>
+      <html:textarea
+        id="zotero-prefpane-__addonRef__-customPrompt"
+        preference="__prefsPrefix__.customPrompt"
+        style="width: 100%; min-height: 80px; resize: vertical; font-family: monospace;"
+      ></html:textarea>
+      <hbox style="margin-top: 8px;">
+        <button
+          id="zotero-prefpane-__addonRef__-savePrompt"
+          label="Save Prompt"
+        />
+        <button
+          id="zotero-prefpane-__addonRef__-resetPrompt"
+          label="Reset to Default"
+          style="margin-left: 5px;"
+        />
+      </hbox>
+    </vbox>
+  </groupbox>
+
+  <groupbox>
+    <label><html:h2>Translation Settings</html:h2></label>
+    <vbox style="margin: 10px 0;">
+      <hbox align="center">
+        <checkbox
+          id="zotero-prefpane-__addonRef__-enableChineseTranslation"
+          preference="__prefsPrefix__.enableChineseTranslation"
+          label="Enable Chinese title translation in confirmation dialog"
+        />
+      </hbox>
+    </vbox>
+  </groupbox>
+
   <vbox>
     <html:label>__addonName__ VERSION __buildVersion__ Build __buildTime__</html:label>
   </vbox>

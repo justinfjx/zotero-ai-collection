@@ -1,6 +1,7 @@
 import { config } from "../../package.json";
 import { callAI } from "./api";
 import { getString } from "../utils/locale";
+import { getPref } from "../utils/prefs";
 
 const PATH_SEPARATOR = "/";
 
@@ -83,6 +84,73 @@ async function safeAddToCollection(
 }
 
 /**
+ * Parse hierarchical path into parent/child components
+ * @param path - Full collection path like "Parent/Child/GrandChild"
+ * @returns Array of partial paths from root to full path
+ */
+function getHierarchicalPaths(path: string): string[] {
+  const parts = path.split(PATH_SEPARATOR);
+  const paths: string[] = [];
+  let current = "";
+  for (const part of parts) {
+    current = current ? `${current}/${part}` : part;
+    paths.push(current);
+  }
+  return paths;
+}
+
+/**
+ * Show classification confirmation dialog
+ * Uses simple confirm dialog for better Zotero 7/8 compatibility
+ */
+async function showClassificationDialog(
+  title: string,
+  chineseTitle: string | undefined,
+  validPaths: string[],
+  _allCollections: Zotero.Collection[]
+): Promise<{ confirmed: boolean; selectedPaths: string[] }> {
+  const win = Zotero.getMainWindow();
+
+  // Build hierarchical display for each path
+  const pathDisplays: string[] = [];
+  for (const fullPath of validPaths) {
+    const hierarchicalPaths = getHierarchicalPaths(fullPath);
+    const lines: string[] = [];
+    for (let i = 0; i < hierarchicalPaths.length; i++) {
+      const partialPath = hierarchicalPaths[i];
+      const pathParts = partialPath.split(PATH_SEPARATOR);
+      const displayName = pathParts[pathParts.length - 1];
+      const indent = "  ".repeat(i);
+      const isLeaf = i === hierarchicalPaths.length - 1;
+      lines.push(`${indent}${isLeaf ? "☑ 📁" : "☐ 📂"} ${displayName}`);
+    }
+    pathDisplays.push(lines.join("\n"));
+  }
+
+  let message = `${getString("dialog.itemTitle") || "文献标题:"}\n${title}`;
+
+  if (chineseTitle) {
+    message += `\n📖 ${chineseTitle}`;
+  }
+
+  message += `\n\n${getString("dialog.recommendedCollections") || "推荐分类:"}\n`;
+  message += pathDisplays.join("\n\n");
+  message += `\n\n${getString("dialog.helpText") || "确认将文献添加到以上选中(☑)的分类?"}`;
+
+  const confirmed = win.confirm(message);
+
+  if (confirmed) {
+    // Return only the leaf paths (full paths)
+    return {
+      confirmed: true,
+      selectedPaths: validPaths,
+    };
+  }
+
+  return { confirmed: false, selectedPaths: [] };
+}
+
+/**
  * Main classification function - process selected items
  */
 export async function classifyItems(items: Zotero.Item[]): Promise<void> {
@@ -102,6 +170,9 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
     win.alert(getString("error.nocollections") || "No collections found in library");
     return;
   }
+
+  // Check if Chinese translation is enabled
+  const enableTranslation = getPref("enableChineseTranslation") as boolean;
 
   let totalAdded = 0;
   let processed = 0;
@@ -130,8 +201,11 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
         text: `[${processed}/${regularItems.length}] ${title.slice(0, 30)}...`,
       });
 
-      const recommendedPaths = await callAI(title, abstract, collectionPaths);
-      const validPaths = (recommendedPaths || []).filter((p) =>
+      const aiResult = await callAI(title, abstract, collectionPaths, enableTranslation);
+      const recommendedPaths = aiResult.collections || [];
+      const chineseTitle = aiResult.chineseTitle;
+
+      const validPaths = recommendedPaths.filter((p) =>
         getCollectionByPath(p, allCollections)
       );
 
@@ -142,14 +216,20 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
         continue;
       }
 
-      const confirmMsg = `[${processed}/${regularItems.length}] ${getString("confirm.message") || "AI recommends these collections:"}\n\n${validPaths.join("\n")}\n\n${getString("confirm.item") || "Item:"} ${title}\n\n${getString("confirm.proceed") || "Confirm adding to these collections?"}`;
+      // Show confirmation dialog (uses fallback simple dialog)
+      const dialogResult = await showClassificationDialog(
+        title,
+        chineseTitle,
+        validPaths,
+        allCollections
+      );
 
-      if (!win.confirm(confirmMsg)) {
+      if (!dialogResult.confirmed || dialogResult.selectedPaths.length === 0) {
         continue;
       }
 
-      // Add to collections
-      for (const path of validPaths) {
+      // Add to selected collections
+      for (const path of dialogResult.selectedPaths) {
         const collection = getCollectionByPath(path, allCollections);
         if (collection) {
           const added = await safeAddToCollection(collection, currentItem.id);
@@ -166,13 +246,24 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
     }
   }
 
+  // Close progress window immediately before showing final alert
   popupWin.changeLine({
     progress: 100,
     text: getString("progress.complete") || "Classification complete",
     type: "success",
   });
-  popupWin.startCloseTimer(3000);
 
+  // Close progress window after a short delay, then show result
+  // Use setTimeout to ensure UI updates before alert blocks
+  setTimeout(() => {
+    try {
+      popupWin.close();
+    } catch (e) {
+      // Ignore close errors
+    }
+  }, 500);
+
+  // Show result summary
   win.alert(
     `${getString("result.title") || "[AI Classification Complete]"}\n\n${getString("result.processed") || "Items processed:"} ${regularItems.length}\n${getString("result.added") || "Collections added:"} ${totalAdded}`
   );
