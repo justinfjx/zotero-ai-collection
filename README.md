@@ -1,391 +1,231 @@
-# Zotero Plugin Template
+<!--
+  README 默认使用中文编写。
+  如需英文版/双语版，欢迎提交 PR。
+-->
 
-![GitHub Repo stars](https://img.shields.io/github/stars/windingwind/zotero-better-notes?label=zotero-better-notes)
-![GitHub Repo stars](https://img.shields.io/github/stars/windingwind/zotero-pdf-preview?label=zotero-pdf-preview)
-![GitHub Repo stars](https://img.shields.io/github/stars/windingwind/zotero-pdf-translate?label=zotero-pdf-translate)
-![GitHub Repo stars](https://img.shields.io/github/stars/windingwind/zotero-tag?label=zotero-tag)
-![GitHub Repo stars](https://img.shields.io/github/stars/iShareStuff/ZoteroTheme?label=zotero-theme)
-![GitHub Repo stars](https://img.shields.io/github/stars/MuiseDestiny/zotero-reference?label=zotero-reference)
-![GitHub Repo stars](https://img.shields.io/github/stars/MuiseDestiny/zotero-citation?label=zotero-citation)
-![GitHub Repo stars](https://img.shields.io/github/stars/MuiseDestiny/ZoteroStyle?label=zotero-style)
-![GitHub Repo stars](https://img.shields.io/github/stars/volatile-static/Chartero?label=Chartero)
-![GitHub Repo stars](https://img.shields.io/github/stars/l0o0/tara?label=tara)
-![GitHub Repo stars](https://img.shields.io/github/stars/redleafnew/delitemwithatt?label=delitemwithatt)
-![GitHub Repo stars](https://img.shields.io/github/stars/redleafnew/zotero-updateifsE?label=zotero-updateifsE)
-![GitHub Repo stars](https://img.shields.io/github/stars/inciteful-xyz/inciteful-zotero-plugin?label=inciteful-zotero-plugin)
-![GitHub Repo stars](https://img.shields.io/github/stars/MuiseDestiny/zotero-gpt?label=zotero-gpt)
-![GitHub Repo stars](https://img.shields.io/github/stars/lifan0127/ai-research-assistant?label=ai-research-assistant)
+<div align="center">
+<img src="addon/chrome/content/icons/favicon.png" width="10%" alt="Zotero AI Collection">
 
+# Collection for Zotero
 
-This is a plugin template for [Zotero](https://www.zotero.org/). Plugins using this template are shown above.
+用 LLM（OpenAI Chat Completions 兼容接口）根据「标题 + 摘要」为条目智能推荐 Zotero 分类（Collection），并提供**可审核**的确认对话框：你决定加到哪些分类、是否拒绝、是否归档。
 
-📖[Plugin Development Documentation](https://zotero.yuque.com/books/share/8d230829-6004-4934-b4c6-685a7001bfa0/vec88d)(Chinese, provides English translation)
-
-🛠️[Zotero Plugin Toolkit](https://github.com/windingwind/zotero-plugin-toolkit) | [API Documentation](https://github.com/windingwind/zotero-plugin-toolkit/blob/master/docs/zotero-plugin-toolkit.md)
-
-ℹ️[Zotero Type Definitions](https://github.com/windingwind/zotero-types)
-
-📜[Zotero Source Code](https://github.com/zotero/zotero)
-
-📌[Zotero Plugin Template](https://github.com/windingwind/zotero-plugin-template)(This repo)
-
-> 👍You are currently in `bootstrap` extension mode. To use `overlay` mode, plsase switch to `overlay` branch in git.
-
-> 👁 Watch this repo so that you can be notified whenever there are fixes & updates.
-
-If you are using this repo, I recommended that you put this badge ([![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)) on your README:
-
-```md
+[![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
+[![zotero target version](https://img.shields.io/badge/Zotero-8-blue?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org/support/beta_builds)
 [![Using Zotero Plugin Template](https://img.shields.io/badge/Using-Zotero%20Plugin%20Template-blue?style=flat-square&logo=github)](https://github.com/windingwind/zotero-plugin-template)
+[![Latest release](https://img.shields.io/github/v/release/justinfjx/zotero-ai-collection?style=flat-square)](https://github.com/justinfjx/zotero-ai-collection/releases)
+![Downloads latest release](https://img.shields.io/github/downloads/justinfjx/zotero-ai-collection/latest/total?style=flat-square&color=yellow)
+![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-black?style=flat-square)
+
+</div>
+
+---
+
+## ⚠️ 安全提示（早期测试版）
+
+> 本插件目前为**早期测试版本**：功能与交互可能随时变动，AI 推荐结果也可能不准确。
+
+> - **请先备份 Zotero 数据目录/数据库**，并建议先在测试库或少量条目上试用；
+> - 批量模式会先对所有条目调用 AI，可能产生较高调用成本；
+> - 请务必在确认对话框中逐条核对，避免将条目误加入不希望的分类。
+
+> 使用前请有一定心理预期（可能需要排错/折腾）。如遇问题欢迎提 issue。
+
+## 🧭 目录
+
+- [🧐 这是什么？](#-这是什么)
+- [✨ 主要功能](#-主要功能)
+- [👋 安装](#-安装)
+- [😎 快速上手](#-快速上手)
+- [⚙️ 设置说明](#-设置说明)
+- [🔌 API 兼容性与输出格式](#-api-兼容性与输出格式)
+- [🔒 隐私、成本与安全](#-隐私成本与安全)
+- [❓ 常见问题（FAQ）](#-常见问题faq)
+- [🛠️ 开发与构建](#-开发与构建)
+- [📄 License](#-license)
+- [🙏 致谢](#-致谢)
+
+## 🧐 这是什么？
+
+**Zotero AI Collection** 是一个 Zotero 插件：当你选中若干条目后，右键点击 **“AI 智能分类”**，插件会把这些条目的「标题/摘要」与当前库中「可选分类路径列表」发给你配置的 LLM，让它从**已有分类路径**中挑选最合适的 1–3 个路径，然后你再在对话框里确认（可勾选/取消勾选）。
+
+插件默认**不会创建新分类**（除了“未分类”文件夹外），也不会改动条目的其它元数据；它做的事情只有：
+
+- 将条目添加到你确认的 Collection(s)
+- （可选）当你选择 `A/B/C` 时，同时加入 `A`、`A/B`、`A/B/C`
+- （可选）你点击“拒绝并归档”时，自动创建一个顶层归档分类（默认名：`未分类`）并将条目加入
+
+> 重要说明：插件提供给 AI 的候选分类是「叶子分类路径」（最深层的那些）。如果你希望 AI 能选中某个中间层级，请确保它本身是叶子节点（没有子分类），或启用“添加到路径中的所有分类”来把叶子选择扩展到父级。
+
+## ✨ 主要功能
+
+- 🧠 **智能推荐分类路径**：基于标题 + 摘要，从你现有的分类树中选择 1–3 个最合适路径
+- ✅ **可审核的确认对话框**：
+  - 逐篇确认（每篇跑完 AI 就弹窗，可中途取消停止）
+  - 批量确认（先全部跑完 AI，再统一审核；更快，但会先产生全部请求成本）
+- 🗂️ **可控的候选分类范围**：在设置里勾选“哪些分类可被提供给 AI”（用于控制准确率与 Token 成本）
+- 🧩 **多配置方案（API Profiles）**：保存/重命名/删除多套 `API Endpoint + Model + API Key`
+- 🧾 **可编辑分类 Prompt**：自定义系统提示词（插件会在后台附加“输出格式要求”）
+- 🧷 **添加到路径所有父分类（可选）**
+- 📦 **拒绝并归档**：一键把条目加入一个归档分类（不存在会自动创建）
+- 🇨🇳 **中文标题翻译（可选）**：仅用于确认对话框展示（不写回条目字段）
+
+## 👋 安装
+
+### 方式 A：安装 `.xpi`（推荐）
+
+1. 下载最新安装包：`zotero-ai-collection.xpi`
+   - GitHub Releases（latest）：`https://github.com/justinfjx/zotero-ai-collection/releases/latest/download/zotero-ai-collection.xpi`
+2. Zotero 顶部菜单：`工具 (Tools) → 附加组件 (Add-ons)`
+3. 右上角齿轮：`Install Add-on From File...`，选择下载的 `.xpi`
+4. 重启 Zotero
+
+### 方式 B：从源码构建
+
+见下方「开发与构建」。
+
+## 😎 快速上手
+
+1. 在 Zotero 里先建立好你的分类树（Collections），建议使用清晰的层级结构
+2. 打开插件设置：
+   - Windows/Linux：`编辑 → 首选项 (Preferences)`
+   - macOS：`Zotero → Settings/Preferences`
+3. 在 `Zotero AI Collection` 设置页中：
+   - 填写 `API Endpoint` / `Model Name` / `API Key`
+   - 点击 **“测试连接”**，确保可用
+   - （可选）在「分类选择」里取消勾选不希望提供给 AI 的分类分支
+   - （可选）选择「逐篇确认 / 批量确认」、是否“添加到路径中的所有分类”、是否启用中文标题翻译
+4. 在条目列表中选中一个或多个条目 → 右键 → **AI 智能分类**
+5. 在确认对话框里勾选你要添加的分类路径，点击确认；或选择拒绝/归档
+
+## ⚙️ 设置说明
+
+插件设置页分为 5 个部分：
+
+### 1) API 配置
+
+- `Configuration` 下拉框：选择当前启用的 API 配置方案
+- `保存/重命名/删除`：管理多套 API 配置，便于在不同服务商之间切换
+- `API Full URL`：完整的 Chat Completions 地址（默认 `https://api.openai.com/v1/chat/completions`）
+- `Model Name`：模型名（默认 `gpt-3.5-turbo`，可改为任意服务端支持的模型名）
+- `API Key`：以 `Authorization: Bearer {API Key}` 方式放在请求头里
+- `测试连接`：用一条测试请求检查端点可用性与返回格式
+
+### 2) 分类 Prompt
+
+- 自定义指导 LLM 推荐分类的 Prompt
+- 建议只改“分类偏好/规则”，不要要求模型输出解释
+- 插件会在后台追加「输出必须为 JSON」的格式要求（见下文）
+
+### 3) 分类选择
+
+- 勾选：该分类分支会作为候选路径提供给 AI
+- 取消勾选：该分类及其子分类将不会出现在 AI 可选范围里
+- 建议：仅勾选与你当前处理主题相关的分支，能显著降低 Token 成本并提升准确率
+
+### 4) 分类行为
+
+- **处理模式**
+  - 逐篇确认：每篇跑完 AI 就弹出确认框，可中途停止
+  - 批量确认：先对所有选中条目调用 AI，再弹一个汇总窗口统一审核
+- **添加到路径中的所有分类**：是否把 `A/B/C` 同时加入 `A`、`A/B`、`A/B/C`
+- **归档分类名称**：点击“拒绝并移至归档”时使用；没有就自动创建（默认 `未分类`）
+
+### 5) 翻译设置
+
+- `在确认对话框中启用中文标题翻译`：开启后会让模型额外返回 `chineseTitle`，仅用于 UI 展示
+
+## 🔌 API 兼容性与输出格式
+
+### API 调用方式
+
+本插件按 **OpenAI Chat Completions** 的请求/响应结构调用接口：
+
+- 请求：`POST {API Full URL}`
+- 请求头：`Authorization: Bearer {API Key}`、`Content-Type: application/json`
+- 请求体：`{ model, messages, temperature, max_tokens }`
+- 响应：需要能从 `choices[0].message.content` 取到模型输出文本
+
+因此，只要你的服务端**兼容上述结构**（例如 OpenAI 兼容网关/反向代理/部分第三方聚合服务），一般即可使用。
+
+> 注意：如果你的服务商需要 `api-key` 等其它鉴权头，或使用 Responses API 而不是 Chat Completions，本插件目前不支持，需要你通过网关转换或自行改代码适配。
+
+### 输出格式要求（非常重要）
+
+模型输出必须包含可解析的 JSON（建议输出**纯 JSON**，不要加 Markdown code fence、不要输出解释）。
+
+#### 默认模式（未开启中文标题翻译）
+
+输出 **JSON 数组**（只能是已存在的完整路径，不能编造新路径）：
+
+```json
+["分类A/子分类B", "分类C"]
 ```
 
-## Features
+#### 翻译模式（开启中文标题翻译）
 
-- Event-driven, functional programming, under extensive skeleton;
-- Simple and user-friendly, works out-of-the-box.
-- Abundant examples in `src/modules/examples.ts`, covering most of the commonly used APIs in plugins(using [zotero-plugin-toolkit](https://github.com/windingwind/zotero-plugin-toolkit));
-- TypeScript support:
-  - Full type definition support for the whole Zotero project, which is written in JavaScript(using [zotero-types](https://github.com/windingwind/zotero-types));
-  - Global variables and environment setup;
-- Plugin build/test/release workflow:
-  - Automatically generate/update plugin id/version, update configrations, and set environment variables(`development/production`);
-  - Automatically build and reload code in Zotero;
-  - Automatically release to GitHub(using [release-it](https://github.com/release-it/release-it));
-- ⭐[New!]Compatibilities for Zotero 6 & Zotero 7.(using [zotero-plugin-toolkit](https://github.com/windingwind/zotero-plugin-toolkit))
+输出 **JSON 对象**（包含 `collections` 数组与 `chineseTitle` 字段）：
 
-## Examples
-
-This repo provides examples for [zotero-plugin-toolkit](https://github.com/windingwind/zotero-plugin-toolkit) APIs.
-
-Search `@example` in `src/examples.ts`. The examples are called in `src/hooks.ts`.
-
-### Basic Examples
-
-- registerNotifier
-- registerPrefs, unregisterPrefs
-
-### Shortcut Keys Examples
-
-- registerShortcuts
-- exampleShortcutLargerCallback
-- exampleShortcutSmallerCallback
-- exampleShortcutConflictionCallback
-
-### UI Examples
-
-![image](https://user-images.githubusercontent.com/33902321/211739774-cc5c2df8-5fd9-42f0-9cdf-0f2e5946d427.png)
-
-- registerStyleSheet(the official make-it-red example)
-- registerRightClickMenuItem
-- registerRightClickMenuPopup
-- registerWindowMenuWithSeprator
-- registerExtraColumn
-- registerExtraColumnWithCustomCell
-- registerCustomItemBoxRow
-- registerCustomCellRenderer
-- registerLibraryTabPanel
-- registerReaderTabPanel
-
-### Preference Pane Examples
-
-![image](https://user-images.githubusercontent.com/33902321/211737987-cd7c5c87-9177-4159-b975-dc67690d0490.png)
-
-- Preferences bindings
-- UI Events
-- Tabel
-- Locale
-
-See [`src/modules/preferenceScript.ts`](./src/modules/preferenceScript.ts)
-
-### HelperExamples
-
-![image](https://user-images.githubusercontent.com/33902321/215119473-e7d0d0ef-6d96-437e-b989-4805ffcde6cf.png)
-
-- dialogExample
-- clipboardExample
-- filePickerExample
-- progressWindowExample
-- vtableExample(See Preference Pane Examples)
-
-### PromptExamples
-
-An Obsidian-style prompt(popup command input) module. It accepts text command to run callback, with optional display in the popup.
-
-Activate with `Shift+P`.
-
-![image](https://user-images.githubusercontent.com/33902321/215120009-e7c7ed27-33a0-44fe-b021-06c272481a92.png)
-
-- registerAlertPromptExample
-
-## Quick Start Guide
-
-### Install Pre-built `xpi`
-
-See how the examples work by directly downloading the `xpi` file from GitHub release and install it to your Zotero.
-
-This is also how your plugin will be released and used by others.
-
-> The release do not promise any real functions. It is probably not up-to-date.
->
-> The `xpi` package is a zip file. However, please don't modify it directly. Modify the source code and build it.
-
-### Build from Source
-
-- Fork this repo/Click `Use this template`;
-- Git clone the forked repo;
-- Enter the repo folder;
-- Modify the settings in `./package.json`, including:
-
-```json5
-{
-  version,
-  author,
-  description,
-  homepage,
-  config {
-    releasepage, // URL to releases(`.xpi`)
-    updaterdf, // URL to update.json
-    addonName, // name to be displayed in the plugin manager
-    addonID, // ID to avoid confliction. IMPORTANT!
-    addonRef, // e.g. Element ID prefix
-    addonInstance // the plugin's root instance: Zotero.${addonInstance}
-  }
-}
+```json
+{"collections":["分类A/子分类B"],"chineseTitle":"中文标题"}
 ```
 
-> Be careful to set the addonID and addonRef to avoid confliction.
+插件会过滤掉“在 Zotero 里不存在”的路径；如果全部无效，会提示“未找到合适的分类”。
 
-- Run `npm install` to set up the plugin and install dependencies. If you don't have NodeJS installed, please download it [here](https://nodejs.org/en/);
-- Run `npm run build` to build the plugin in production mode. Run `npm run build-dev` to build the plugin in development mode. The xpi for installation and the built code is under `builds` folder.
+## 🔒 隐私、成本与安全
 
-> What the difference between dev & prod?
->
-> - This environment variable is stored in `Zotero.${addonInstance}.data.env`. The outputs to console is disabled in prod mode.
-> - You can decide what users cannot see/use based on this variable.
+- 插件会把：**标题、摘要、候选分类路径列表** 发送给你配置的 LLM 服务端（不会上传 PDF 全文）
+- 这可能涉及隐私/保密信息与 API 调用成本；请自行评估，并优先使用你信任的服务商或自建服务
+- `API Key` 会保存在 Zotero 的偏好设置中；建议不要在共享电脑上使用长期密钥
 
-### Release
+## ❓ 常见问题（FAQ）
 
-To build and release, use
+### 1) 右键菜单里看不到 “AI 智能分类”
 
-```shell
-# A release-it command: version increase, npm run build, git push, and GitHub release
-# You need to set the environment variable GITHUB_TOKEN https://github.com/settings/tokens
-# release-it: https://github.com/release-it/release-it
+- 确认已安装并启用插件；必要时重启 Zotero
+- 该菜单只会出现在“条目列表”的右键菜单中（不是 PDF 阅读器菜单）
+
+### 2) “测试连接”失败 / 分类时报错
+
+- 检查 `API Endpoint` 是否可访问（公司代理/防火墙/网络环境）
+- 检查 `API Key` 是否正确、是否有余额/额度、是否被限流
+- 确认服务端兼容 Chat Completions 返回格式（`choices[0].message.content`）
+- 可在 Zotero 的 `工具 → 开发者 → 错误控制台` 查看更详细错误信息
+
+### 3) 经常提示 “未找到合适的分类”
+
+- 你的库中可能没有任何分类（Collections），或在设置里把候选分类都取消勾选了
+- 条目没有摘要会降低效果（插件会用“无摘要”占位）
+- 建议缩小候选分类范围（只勾选相关分支），并优化 Prompt 让模型更“克制”
+
+### 4) 批量模式会先“全部请求 AI”再让我审核吗？
+
+是的：批量模式会先对所有选中条目调用 AI，再弹出汇总审核窗口。
+
+## 🛠️ 开发与构建
+
+```bash
+cd zotero-ai-collection
+npm install
+npm run build
+```
+
+- 构建产物：`builds/zotero-ai-collection.xpi`
+- 开发调试（需本机安装 Zotero）：`npm run start-z7`（或 `npm run start`）
+
+### Release（可选）
+
+```bash
 npm run release
 ```
 
-### Setup Development Environment
+该命令使用 `release-it`：自动增版本、构建、推送与创建 GitHub Release（需要设置 `GITHUB_TOKEN`）。
 
-1. Install a beta version of Zotero: https://www.zotero.org/support/beta_builds (Zotero 7 beta: https://www.zotero.org/support/dev/zotero_7_for_developers)
+## 📄 License
 
-2. Install Firefox 60(for Zotero 6)/Firefox 102(for Zotero 7)
+AGPL-3.0-or-later. See `LICENSE`.
 
-3. Copy zotero command line config file. Modify the commands that starts your installation of the beta Zotero.
+## 🙏 致谢
 
-> (Optional) Do this only once: Start the beta Zotero with `/path/to/zotero -p`. Create a new profile and use it as your development profile.
-> Use `/path/to/zotero -p {profile_name}` to specify which profile to run with.
-
-```sh
-cp ./scripts/zotero-cmd-default.json ./scripts/zotero-cmd.json
-vim ./scripts/zotero-cmd.json
-```
-
-4. Setup plugin development environment following this [link](https://www.zotero.org/support/dev/client_coding/plugin_development#setting_up_a_plugin_development_environment).
-
-5. Build plugin and restart Zotero with `npm run restart`.
-
-6. Launch Firefox 60(Zotero 6)/Firefox 102(Zotero 7)
-
-7. In Firefox, go to devtools, go to settings, click "enable remote debugging" and the one next to it that's also about debugging
-
-> Press `shift+F8` in FF 60, or enter `about:debugging#/setup` in FF 102.
-
-8. In Zotero, go to setting, advanced, config editor, look up "debugging" and click on "allow remote debugging".
-
-9. Connect to Zotero in Firefox.
-
-> In FF 60, click the hamburger menu in the top right -> web developer -> Connect..., then enter `localhost:6100`.
-
-> In FF 102, enter `localhost:6100` in the bottom input of remote-debugging page and click `add`.
-
-10. Click `connect` in the leftside-bar of Firefox remote-debugging page.
-
-11. Click "Inspect Main Process"
-
-### Debug in Zotero
-
-You can also:
-
-- Test code snipastes in Tools->Developer->Run Javascript;
-- Debug output with `Zotero.debug()`. Find the outputs in Help->Debug Output Logging->View Output;
-- Debug UI. Zotero is built on the Firefox XUL framework. Debug XUL UI with software like [XUL Explorer](https://udn.realityripple.com/docs/Archive/Mozilla/XUL_Explorer).
-  > XUL Documentation: http://www.devdoc.net/web/developer.mozilla.org/en-US/docs/XUL.html
-
-## Details
-
-### About Hooks
-
-> See also [`src/hooks.ts`](https://github.com/windingwind/zotero-plugin-template/blob/bootstrap/src/hooks.ts)
-
-1. When install/enable/startup triggered from Zotero, `bootstrap.js` > `startup` is called
-   - Wait for Zotero ready
-   - Load `index.js` (the main entrance of plugin code, built from `index.ts`)
-   - Register resources if Zotero 7+
-2. In the main entrance `index.js`, the plugin object is injected under `Zotero` and `hooks.ts` > `onStartup` is called.
-   - Initialize anything you want, including notify listeners, preference panes, and UI elements.
-3. When uninstall/disabled triggered from Zotero, `bootstrap.js` > `shutdown` is called.
-   - `events.ts` > `onShutdown` is called. Remove UI elements, preference panes, or anything created by the plugin.
-   - Remove scripts and release resources.
-
-### About Global Variables
-
-> See also [`src/index.ts`](https://github.com/windingwind/zotero-plugin-template/blob/bootstrap/src/index.ts)
-
-The bootstrapped plugin runs in a sandbox, which does not have default global variables like `Zotero` or `window`, which we used to have in the overlay plugins' window environment.
-
-This template registers the following variables to the global scope:
-
-```ts
-Zotero, ZoteroPane, Zotero_Tabs, window, document, rootURI, ztoolkit, addon;
-```
-
-### About Preference
-
-Zotero 6 doesn't support preference pane injection in bootstrap mode, thus I write a register for Zotero 6 or lower.
-
-You only need to maintain one `preferences.xhtml` which runs natively on Zotero 7 and let the plugin template handle it when it is running on Zotero 6.
-
-<table style="margin-left: auto; margin-right: auto;">
-    <tr>
-        <td>
-          <img width="350px" src="https://user-images.githubusercontent.com/33902321/208080125-2a776a98-f427-4c81-8924-7877bf803e3d.png"/>
-          <div>Zotero 7</div>
-        </td>
-        <td>
-          <img width="300px" src="https://user-images.githubusercontent.com/33902321/208080491-b7006c08-2679-4f85-9a28-dba8e622d745.png"/>
-          <div>Zotero 6</div>
-        </td>
-    </tr>
-</table>
-
-https://github.com/windingwind/zotero-plugin-template/blob/08d72a4e2b3bacff574f537bbd06cb33e6b22480/src/modules/examples.ts#L73-L85
-
-> `<preferences>` element is deprecated. Please use the full pref-key in the elements' `preference` attribute. Like:
-
-```xml
-<checkbox label="&zotero.__addonRef__.pref.enable.label;" preference="extensions.zotero.__addonRef__.enable" />
-```
-
-The elements with `preference` attributes will bind to Zotero preferences.
-
-Remember to call `unregister()` on plugin unload.
-
-### Create Elements API
-
-The plugin template provides new APIs for bootstrap plugins. We have two reasons to use these APIs, instead of the `createElement/createElementNS`:
-
-- In bootstrap mode, plugins have to clean up all UI elements on exit (disable or uninstall), which is very annoying. Using the `createElement`, the plugin template will maintain these elements. Just `unregisterAll` at the exit.
-- Zotero 7 requires createElement()/createElementNS() → createXULElement() for remaining XUL elements, while Zotero 6 doesn't support `createXULElement`. The React.createElement-like API `createElement` detects namespace(xul/html/svg) and creates elements automatically, with the return element in the corresponding TS element type.
-
-```ts
-createElement(document, "div"); // returns HTMLDivElement
-createElement(document, "hbox"); // returns XUL.Box
-createElement(document, "button", { namespace: "xul" }); // manually set namespace. returns XUL.Button
-```
-
-### About Build
-
-Use Esbuild to build `.ts` source code to `.js`.
-
-Use `replace-in-file` to replace keywords and configurations defined in `package.json` in non-build files (`.xul/xhtml`, `.dtd`, and `.properties`).
-
-Steps in `scripts/build.js`:
-
-1. Clean `./builds`
-2. Copy `./addon` to `./builds`
-3. Esbuild to `./builds/addon/chrome/content/scripts`
-4. Replace `__buildVersion__` and `__buildTime__` in `./builds/addon`
-5. Zip the `./builds/addon` to `./builds/*.xpi`
-
-### About Zotero API
-
-Zotero docs are outdated and incomplete. Clone https://github.com/zotero/zotero and search the keyword globally.
-
-> ⭐The [zotero-types](https://github.com/windingwind/zotero-types) provides most frequently used Zotero APIs. It's included in this template by default. Your IDE would provide hint for most of the APIs.
-
-A trick for finding the API you want:
-
-Search the UI label in `.xul`(`.xhtml`)/`.dtd`/`.properties` files, find the corresponding key in locale file. Then search this keys in `.js`/`.jsx` files.
-
-### Directory Structure
-
-This section shows the directory structure of a template.
-
-- All `.js/.ts` code files are in `./src`;
-- Addon config files: `./addon/chrome.manifest`, `./addon/install.rdf`, and `./addon/manifest.json`;
-- UI files: `./addon/chrome/content/*.xhtml`.
-- Locale files: `./addon/chrome/locale/[*.dtd, *.properties]`;
-- Resource files: `./addon/chrome/skin/default/__addonRef__/*.dtd`;
-- Preferences file: `./addon/chrome/defaults/preferences/defaults.js`;
-  > Don't break the lines in the `defaults.js`
-
-```shell
-│  .gitignore
-│  .release-it.json # release-it conf
-|  tsconfig.json    # https://code.visualstudio.com/docs/languages/jsconfig#
-│  build.js         # esbuild
-│  LICENSE
-│  package.json     # npm conf
-│  README.md        # readme
-│  update.rdf       # addon update
-│
-├─.github           # github conf
-│
-├─addon             # addon dir
-│  │  chrome.manifest  # for Zotero 6
-│  │  manifest.json # for Zotero 7
-│  │  install.rdf   # addon install conf, for Zotero 6
-│  │  bootstrap.js  # addon load/unload script, like a main.c
-│  │
-│  └─chrome
-│      ├─content    # UI
-│      │  │  preferences.xhtml
-│      │  │
-│      │  ├─icons
-│      │  │      favicon.png
-│      │  │      favicon@0.5x.png
-│      │  │
-│      │  └─scripts
-│      └─locale     # locale
-│         ├─en-US
-│         │      overlay.dtd
-│         │      addon.properties
-│         │
-│         ├─zh-CN
-│         |      overlay.dtd
-│         └─     addon.properties
-│
-├─builds            # build dir
-│  └─.xpi
-│
-└─src               # source code
-    │  index.ts     # main entry
-    │  addon.ts     # base class
-    │  hooks.ts     # lifecycle hooks
-    |
-    └─modules       # sub modules
-       │  examples.ts           # examples factory
-       │  locale.ts             # locale .properties
-       │  preferenceScript.ts   # script runs in preferences.xhtml
-       └─ progressWindow.ts     # progressWindow tool
-```
-
-## Disclaimer
-
-Use this code under AGPL. No warranties are provided. Keep the laws of your locality in mind!
-
-If you want to change the license, please contact me at wyzlshx@foxmail.com
-
-Part of the code of this repo refers to other open-source projects within the allowed scope.
-
-- zotero-better-bibtex(`d.ts`)
+- `windingwind/zotero-plugin-template`、`zotero-plugin-toolkit`
+- `zotero-actions-tags`、`zotero-gpt`、`zotero-pdf2zh`
