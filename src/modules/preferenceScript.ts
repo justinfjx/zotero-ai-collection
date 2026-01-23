@@ -62,6 +62,9 @@ function initPrefsUI() {
   const win = addon.data.prefs!.window;
   const doc = win.document;
 
+  // Apply localized text to UI elements
+  localizePrefsUI(doc);
+
   // Initialize custom prompt textarea with default value
   const promptTextarea = doc.querySelector(
     `#zotero-prefpane-${config.addonRef}-customPrompt`
@@ -76,6 +79,69 @@ function initPrefsUI() {
 
   // Initialize collection tree
   loadCollectionTree();
+}
+
+/**
+ * Apply localized text to all UI elements in preferences
+ */
+function localizePrefsUI(doc: Document) {
+  const prefix = `zotero-prefpane-${config.addonRef}`;
+
+  // Helper function to set element text
+  const setText = (id: string, key: string, attr: "textContent" | "label" = "textContent") => {
+    const el = doc.getElementById(`${prefix}-${id}`);
+    if (el) {
+      const text = getString(key);
+      if (attr === "label") {
+        el.setAttribute("label", text);
+      } else {
+        el.textContent = text;
+      }
+    }
+  };
+
+  // Section titles
+  setText("title", "prefs.title");
+  setText("promptTitle", "prefs.classificationPrompt");
+  setText("collectionTitle", "prefs.collectionSelection");
+  setText("behaviorTitle", "prefs.classificationBehavior");
+  setText("translationTitle", "prefs.translationSettings");
+
+  // API Configuration section
+  setText("configLabel", "prefs.configuration");
+  setText("saveConfig", "prefs.saveConfig", "label");
+  setText("renameConfig", "prefs.rename", "label");
+  setText("deleteConfig", "prefs.delete", "label");
+  setText("apiUrlLabel", "prefs.apiUrl");
+  setText("modelLabel", "prefs.model");
+  setText("apiKeyLabel", "prefs.apiKey");
+  setText("test", "prefs.testConnection", "label");
+
+  // Prompt section
+  setText("promptHelp", "prefs.promptHelp");
+  setText("savePrompt", "prefs.savePrompt", "label");
+  setText("resetPrompt", "prefs.resetToDefault", "label");
+
+  // Collection section
+  setText("collectionHelp", "prefs.collectionSelectionHelp");
+  setText("selectAll", "prefs.selectAll", "label");
+  setText("deselectAll", "prefs.deselectAll", "label");
+  setText("refreshCollections", "prefs.refresh", "label");
+  setText("loadingText", "prefs.loadingCollections");
+  setText("collectionTip", "prefs.collectionSelectionTip");
+
+  // Behavior section
+  setText("processingModeLabel", "prefs.processingMode");
+  setText("modeOneByOne", "prefs.modeOneByOne", "label");
+  setText("modeBatch", "prefs.modeBatch", "label");
+  setText("batchModeHelp", "prefs.modeBatchHelp");
+  setText("addToAllPathCollections", "prefs.addToAllPathCollections", "label");
+  setText("addToAllPathHelp", "prefs.addToAllPathCollectionsHelp");
+  setText("archiveLabel", "prefs.archiveCollectionName");
+  setText("archiveHelp", "prefs.archiveCollectionNameHelp");
+
+  // Translation section
+  setText("enableChineseTranslation", "prefs.enableChineseTranslation", "label");
 }
 
 function getApiConfigs(): ApiConfig[] {

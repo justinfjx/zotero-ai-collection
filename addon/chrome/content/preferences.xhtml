@@ -3,12 +3,12 @@
   onload="Zotero.__addonInstance__.hooks.onPrefsEvent('load', {window})"
 >
   <groupbox>
-    <label><html:h2>AI Collection Settings</html:h2></label>
+    <label><html:h2 id="zotero-prefpane-__addonRef__-title">AI Collection Settings</html:h2></label>
 
     <!-- API Configuration Selector -->
     <vbox style="margin: 10px 0;">
       <hbox align="center" style="margin-bottom: 8px;">
-        <html:label for="zotero-prefpane-__addonRef__-configSelect" style="width: 120px;"
+        <html:label id="zotero-prefpane-__addonRef__-configLabel" for="zotero-prefpane-__addonRef__-configSelect" style="width: 120px;"
           >Configuration</html:label
         >
         <menulist
@@ -20,23 +20,23 @@
         </menulist>
         <button
           id="zotero-prefpane-__addonRef__-saveConfig"
-          label="Save Config"
+          label=""
           style="margin-left: 5px;"
         />
         <button
           id="zotero-prefpane-__addonRef__-renameConfig"
-          label="Rename"
+          label=""
           style="margin-left: 5px;"
         />
         <button
           id="zotero-prefpane-__addonRef__-deleteConfig"
-          label="Delete"
+          label=""
           style="margin-left: 5px;"
         />
       </hbox>
 
       <hbox align="center" style="margin-bottom: 8px;">
-        <html:label for="zotero-prefpane-__addonRef__-apiUrl" style="width: 120px;"
+        <html:label id="zotero-prefpane-__addonRef__-apiUrlLabel" for="zotero-prefpane-__addonRef__-apiUrl" style="width: 120px;"
           >API Endpoint</html:label
         >
         <html:input
@@ -48,7 +48,7 @@
       </hbox>
 
       <hbox align="center" style="margin-bottom: 8px;">
-        <html:label for="zotero-prefpane-__addonRef__-model" style="width: 120px;"
+        <html:label id="zotero-prefpane-__addonRef__-modelLabel" for="zotero-prefpane-__addonRef__-model" style="width: 120px;"
           >Model Name</html:label
         >
         <html:input
@@ -60,7 +60,7 @@
       </hbox>
 
       <hbox align="center" style="margin-bottom: 8px;">
-        <html:label for="zotero-prefpane-__addonRef__-apiKey" style="width: 120px;"
+        <html:label id="zotero-prefpane-__addonRef__-apiKeyLabel" for="zotero-prefpane-__addonRef__-apiKey" style="width: 120px;"
           >API Key</html:label
         >
         <html:input
@@ -79,7 +79,7 @@
       <hbox style="margin-top: 10px; align-items: flex-start;">
         <button
           id="zotero-prefpane-__addonRef__-test"
-          label="Test Connection"
+          label=""
         />
       </hbox>
       <hbox style="margin-top: 5px;">
@@ -92,9 +92,9 @@
   </groupbox>
 
   <groupbox>
-    <label><html:h2>Classification Prompt</html:h2></label>
+    <label><html:h2 id="zotero-prefpane-__addonRef__-promptTitle">Classification Prompt</html:h2></label>
     <vbox style="margin: 10px 0;">
-      <html:label style="margin-bottom: 5px; color: #666; font-size: 12px;">
+      <html:label id="zotero-prefpane-__addonRef__-promptHelp" style="margin-bottom: 5px; color: #666; font-size: 12px;">
         Customize the prompt that guides LLM to recommend classifications (do not change the output format requirement):
       </html:label>
       <html:textarea
@@ -105,11 +105,11 @@
       <hbox style="margin-top: 8px;">
         <button
           id="zotero-prefpane-__addonRef__-savePrompt"
-          label="Save Prompt"
+          label=""
         />
         <button
           id="zotero-prefpane-__addonRef__-resetPrompt"
-          label="Reset to Default"
+          label=""
           style="margin-left: 5px;"
         />
       </hbox>
@@ -117,24 +117,24 @@
   </groupbox>
 
   <groupbox>
-    <label><html:h2>Collection Selection</html:h2></label>
+    <label><html:h2 id="zotero-prefpane-__addonRef__-collectionTitle">Collection Selection</html:h2></label>
     <vbox style="margin: 10px 0;">
-      <html:label style="margin-bottom: 5px; color: #666; font-size: 12px;">
+      <html:label id="zotero-prefpane-__addonRef__-collectionHelp" style="margin-bottom: 5px; color: #666; font-size: 12px;">
         Select which collections are available for AI classification:
       </html:label>
       <hbox style="margin-bottom: 8px;">
         <button
           id="zotero-prefpane-__addonRef__-selectAll"
-          label="Select All"
+          label=""
         />
         <button
           id="zotero-prefpane-__addonRef__-deselectAll"
-          label="Deselect All"
+          label=""
           style="margin-left: 5px;"
         />
         <button
           id="zotero-prefpane-__addonRef__-refreshCollections"
-          label="Refresh"
+          label=""
           style="margin-left: 5px;"
         />
       </hbox>
@@ -150,19 +150,19 @@
           font-size: 13px;
         "
       >
-        <html:div style="color: #999;">Loading collections...</html:div>
+        <html:div id="zotero-prefpane-__addonRef__-loadingText" style="color: #999;">Loading collections...</html:div>
       </html:div>
-      <html:label style="margin-top: 5px; color: #888; font-size: 11px;">
+      <html:label id="zotero-prefpane-__addonRef__-collectionTip" style="margin-top: 5px; color: #888; font-size: 11px;">
         Unchecked collections will not be provided to AI for selection.
       </html:label>
     </vbox>
   </groupbox>
 
   <groupbox>
-    <label><html:h2>Classification Behavior</html:h2></label>
+    <label><html:h2 id="zotero-prefpane-__addonRef__-behaviorTitle">Classification Behavior</html:h2></label>
     <vbox style="margin: 10px 0;">
       <!-- Processing Mode -->
-      <html:label style="font-weight: bold; margin-bottom: 8px;">Processing Mode</html:label>
+      <html:label id="zotero-prefpane-__addonRef__-processingModeLabel" style="font-weight: bold; margin-bottom: 8px;">Processing Mode</html:label>
       <radiogroup
         id="zotero-prefpane-__addonRef__-batchMode"
         preference="__prefsPrefix__.batchMode"
@@ -170,15 +170,15 @@
         <radio
           id="zotero-prefpane-__addonRef__-modeOneByOne"
           value="false"
-          label="One-by-one: Confirm each item before processing next"
+          label=""
         />
         <radio
           id="zotero-prefpane-__addonRef__-modeBatch"
           value="true"
-          label="Batch: Process all items first, then confirm all at once"
+          label=""
         />
       </radiogroup>
-      <html:label style="margin-left: 20px; color: #666; font-size: 11px; margin-bottom: 12px;">
+      <html:label id="zotero-prefpane-__addonRef__-batchModeHelp" style="margin-left: 20px; color: #666; font-size: 11px; margin-bottom: 12px;">
         Batch mode processes all selected items with AI first, then shows a single dialog for reviewing all results.
       </html:label>
 
@@ -187,16 +187,16 @@
         <checkbox
           id="zotero-prefpane-__addonRef__-addToAllPathCollections"
           preference="__prefsPrefix__.addToAllPathCollections"
-          label="Add to all collections in path (e.g., A, A/b, A/b/c)"
+          label=""
         />
       </hbox>
-      <html:label style="margin-left: 20px; color: #666; font-size: 11px;">
+      <html:label id="zotero-prefpane-__addonRef__-addToAllPathHelp" style="margin-left: 20px; color: #666; font-size: 11px;">
         When unchecked, items will only be added to the leaf collection (e.g., just "c" in path A/b/c).
         When checked, items will be added to all collections along the path.
       </html:label>
 
       <hbox align="center" style="margin-top: 12px;">
-        <html:label for="zotero-prefpane-__addonRef__-archiveCollectionName" style="width: 180px;"
+        <html:label id="zotero-prefpane-__addonRef__-archiveLabel" for="zotero-prefpane-__addonRef__-archiveCollectionName" style="width: 180px;"
           >Archive Collection Name</html:label
         >
         <html:input
@@ -206,20 +206,20 @@
           style="flex: 1; min-width: 200px;"
         />
       </hbox>
-      <html:label style="margin-left: 20px; color: #666; font-size: 11px;">
+      <html:label id="zotero-prefpane-__addonRef__-archiveHelp" style="margin-left: 20px; color: #666; font-size: 11px;">
         The collection name for "Reject &amp; Archive" button. Will be created if it doesn't exist.
       </html:label>
     </vbox>
   </groupbox>
 
   <groupbox>
-    <label><html:h2>Translation Settings</html:h2></label>
+    <label><html:h2 id="zotero-prefpane-__addonRef__-translationTitle">Translation Settings</html:h2></label>
     <vbox style="margin: 10px 0;">
       <hbox align="center">
         <checkbox
           id="zotero-prefpane-__addonRef__-enableChineseTranslation"
           preference="__prefsPrefix__.enableChineseTranslation"
-          label="Enable Chinese title translation in confirmation dialog"
+          label=""
         />
       </hbox>
     </vbox>
