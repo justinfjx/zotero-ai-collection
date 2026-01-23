@@ -14,3 +14,9 @@ pref("__prefsPrefix__.currentConfigName", "Default");
 
 // Chinese title translation toggle
 pref("__prefsPrefix__.enableChineseTranslation", false);
+
+// Archive collection name (for "Reject & Archive" button)
+pref("__prefsPrefix__.archiveCollectionName", "未分类");
+
+// Batch processing mode: false = one-by-one confirmation, true = batch confirmation
+pref("__prefsPrefix__.batchMode", false);

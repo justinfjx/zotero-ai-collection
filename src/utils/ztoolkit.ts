@@ -4,6 +4,7 @@ import { UITool } from "zotero-plugin-toolkit/dist/tools/ui";
 import { MenuManager } from "zotero-plugin-toolkit/dist/managers/menu";
 import { PreferencePaneManager } from "zotero-plugin-toolkit/dist/managers/preferencePane";
 import { ProgressWindowHelper } from "zotero-plugin-toolkit/dist/helpers/progressWindow";
+import { DialogHelper } from "zotero-plugin-toolkit/dist/helpers/dialog";
 import { config } from "../../package.json";
 
 export { createZToolkit };
@@ -39,6 +40,7 @@ class MyToolkit extends BasicTool {
   Menu: MenuManager;
   PreferencePane: PreferencePaneManager;
   ProgressWindow: typeof ProgressWindowHelper;
+  Dialog: typeof DialogHelper;
 
   constructor() {
     super();
@@ -46,6 +48,7 @@ class MyToolkit extends BasicTool {
     this.Menu = new MenuManager(this);
     this.PreferencePane = new PreferencePaneManager(this);
     this.ProgressWindow = ProgressWindowHelper;
+    this.Dialog = DialogHelper;
   }
 
   unregisterAll() {
