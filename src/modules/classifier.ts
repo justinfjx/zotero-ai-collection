@@ -158,7 +158,7 @@ export function buildCollectionTree(
 
 /**
  * Get collection by path string
- * Uses getChildCollections() to find nested collections
+ * Uses smart matching to handle collection names containing "/"
  * @param pathStr - Collection path like "Parent/Child"
  * @param allCollections - Top-level collections from getByLibrary()
  * @returns Collection object or null
@@ -167,33 +167,50 @@ export function getCollectionByPath(
   pathStr: string,
   allCollections: Zotero.Collection[]
 ): Zotero.Collection | null {
-  const parts = pathStr.split(PATH_SEPARATOR);
-  let targetCollection: Zotero.Collection | null = null;
+  // Try to find a matching collection by traversing the tree
+  // This handles cases where collection names contain "/"
 
-  // Find the first part in top-level collections
-  const firstPart = parts[0].toLowerCase();
-  targetCollection = allCollections.find(
-    (c) => c.name.toLowerCase() === firstPart && !c.parentID
-  ) || null;
+  function findInChildren(
+    remainingPath: string,
+    collections: Zotero.Collection[]
+  ): Zotero.Collection | null {
+    if (!remainingPath) return null;
 
-  if (!targetCollection) {
+    // Try each possible split point (greedy match - try longest name first)
+    // This handles names like "Aerial Manipulation/Contact"
+    for (let i = remainingPath.length; i > 0; i--) {
+      const possibleName = remainingPath.substring(0, i);
+      const rest = remainingPath.substring(i);
+
+      // Check if rest starts with "/" or is empty
+      if (rest && !rest.startsWith("/")) continue;
+
+      // Remove leading "/" from rest
+      const nextPath = rest.startsWith("/") ? rest.substring(1) : rest;
+
+      // Find collection with this name
+      const match = collections.find(
+        (c) => c.name.toLowerCase() === possibleName.toLowerCase()
+      );
+
+      if (match) {
+        if (!nextPath) {
+          // Found the target collection
+          return match;
+        }
+        // Continue searching in children
+        const children = match.getChildCollections(false);
+        const result = findInChildren(nextPath, children);
+        if (result) return result;
+      }
+    }
+
     return null;
   }
 
-  // Navigate through the rest of the path using getChildCollections()
-  for (let i = 1; i < parts.length; i++) {
-    const nameToFind = parts[i].toLowerCase();
-    const children: Zotero.Collection[] = targetCollection!.getChildCollections(false);
-    const match: Zotero.Collection | undefined = children.find((c: Zotero.Collection) => c.name.toLowerCase() === nameToFind);
-
-    if (match) {
-      targetCollection = match;
-    } else {
-      return null;
-    }
-  }
-
-  return targetCollection;
+  // Start with top-level collections only
+  const topLevel = allCollections.filter((c) => !c.parentID);
+  return findInChildren(pathStr, topLevel);
 }
 
 /**
