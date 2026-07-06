@@ -71,7 +71,8 @@ function initPrefsUI() {
   ) as HTMLTextAreaElement;
   if (promptTextarea) {
     const savedPrompt = getPref("customPrompt") as string;
-    promptTextarea.value = savedPrompt && savedPrompt !== "undefined" ? savedPrompt : DEFAULT_PROMPT;
+    promptTextarea.value =
+      savedPrompt && savedPrompt !== "undefined" ? savedPrompt : DEFAULT_PROMPT;
   }
 
   // Initialize config selector
@@ -88,7 +89,11 @@ function localizePrefsUI(doc: Document) {
   const prefix = `zotero-prefpane-${config.addonRef}`;
 
   // Helper function to set element text
-  const setText = (id: string, key: string, attr: "textContent" | "label" = "textContent") => {
+  const setText = (
+    id: string,
+    key: string,
+    attr: "textContent" | "label" = "textContent"
+  ) => {
     const el = doc.getElementById(`${prefix}-${id}`);
     if (el) {
       const text = getString(key);
@@ -141,7 +146,11 @@ function localizePrefsUI(doc: Document) {
   setText("archiveHelp", "prefs.archiveCollectionNameHelp");
 
   // Translation section
-  setText("enableChineseTranslation", "prefs.enableChineseTranslation", "label");
+  setText(
+    "enableChineseTranslation",
+    "prefs.enableChineseTranslation",
+    "label"
+  );
 }
 
 function getApiConfigs(): ApiConfig[] {
@@ -242,13 +251,16 @@ function bindPrefEvents() {
   // 🥚 Easter Egg 1: Title click easter egg (5 clicks)
   let titleClickCount = 0;
   let titleLastClickTime = 0;
-  doc.querySelector(`#zotero-prefpane-${config.addonRef}-title`)
+  doc
+    .querySelector(`#zotero-prefpane-${config.addonRef}-title`)
     ?.addEventListener("click", () => {
       const now = Date.now();
       if (now - titleLastClickTime < 500) {
         titleClickCount++;
         if (titleClickCount >= 5) {
-          win.alert("🎉 你发现了彩蛋！\n\n感谢使用 Collection for Zotero\n\nMade with ❤️ by Justin\n\n愿你的文献永远井井有条 📚");
+          win.alert(
+            "🎉 你发现了彩蛋！\n\n感谢使用 Collection for Zotero\n\nMade with ❤️ by Justin\n\n愿你的文献永远井井有条 📚"
+          );
           titleClickCount = 0;
         }
       } else {
@@ -274,7 +286,9 @@ function bindPrefEvents() {
         (getPref("currentConfigName") as string) || "My Config"
       );
       if (!name || name.trim() === "" || name === "Default") {
-        win.alert(getString("prefs.invalidConfigName") || "Invalid configuration name.");
+        win.alert(
+          getString("prefs.invalidConfigName") || "Invalid configuration name."
+        );
         return;
       }
 
@@ -306,16 +320,22 @@ function bindPrefEvents() {
     ?.addEventListener("click", () => {
       const currentName = getPref("currentConfigName") as string;
       if (currentName === "Default") {
-        win.alert(getString("prefs.cannotRenameDefault") || "Cannot rename Default configuration.");
+        win.alert(
+          getString("prefs.cannotRenameDefault") ||
+            "Cannot rename Default configuration."
+        );
         return;
       }
 
       const newName = win.prompt(
-        getString("prefs.renameConfigPrompt") || "Enter new configuration name:",
+        getString("prefs.renameConfigPrompt") ||
+          "Enter new configuration name:",
         currentName
       );
       if (!newName || newName.trim() === "" || newName === "Default") {
-        win.alert(getString("prefs.invalidConfigName") || "Invalid configuration name.");
+        win.alert(
+          getString("prefs.invalidConfigName") || "Invalid configuration name."
+        );
         return;
       }
 
@@ -336,11 +356,19 @@ function bindPrefEvents() {
     ?.addEventListener("click", () => {
       const currentName = getPref("currentConfigName") as string;
       if (currentName === "Default") {
-        win.alert(getString("prefs.cannotDeleteDefault") || "Cannot delete Default configuration.");
+        win.alert(
+          getString("prefs.cannotDeleteDefault") ||
+            "Cannot delete Default configuration."
+        );
         return;
       }
 
-      if (!win.confirm(getString("prefs.confirmDelete") || `Delete configuration "${currentName}"?`)) {
+      if (
+        !win.confirm(
+          getString("prefs.confirmDelete") ||
+            `Delete configuration "${currentName}"?`
+        )
+      ) {
         return;
       }
 
@@ -361,7 +389,9 @@ function bindPrefEvents() {
   let pressTimer: number | null = null;
   toggleBtn?.addEventListener("mousedown", () => {
     pressTimer = win.setTimeout(() => {
-      win.alert("👀 你盯着我看了好久...\n\n是想偷看 API Key 吗？\n\n放心，你的密钥很安全 🔐");
+      win.alert(
+        "👀 你盯着我看了好久...\n\n是想偷看 API Key 吗？\n\n放心，你的密钥很安全 🔐"
+      );
     }, 3000) as unknown as number;
   });
   toggleBtn?.addEventListener("mouseup", () => {
@@ -416,24 +446,32 @@ function bindPrefEvents() {
 
       button.disabled = true;
       button.textContent = getString("prefs.testing") || "Testing...";
-      resultDiv.textContent = getString("prefs.testing") || "Testing connection...";
+      resultDiv.textContent =
+        getString("prefs.testing") || "Testing connection...";
       resultDiv.style.color = "#666";
 
       try {
         const result = await testConnection();
         if (result.success) {
-          resultDiv.textContent = `✓ ${getString("prefs.testSuccess") || "Connection successful!"}`;
+          resultDiv.textContent = `✓ ${
+            getString("prefs.testSuccess") || "Connection successful!"
+          }`;
           resultDiv.style.color = "#2e7d32";
         } else {
-          resultDiv.textContent = `✗ ${getString("prefs.testFailed") || "Connection failed."} ${result.message || ""}`;
+          resultDiv.textContent = `✗ ${
+            getString("prefs.testFailed") || "Connection failed."
+          } ${result.message || ""}`;
           resultDiv.style.color = "#c62828";
         }
       } catch (e: any) {
-        resultDiv.textContent = `✗ ${getString("prefs.testError") || "Error:"} ${e.message}`;
+        resultDiv.textContent = `✗ ${
+          getString("prefs.testError") || "Error:"
+        } ${e.message}`;
         resultDiv.style.color = "#c62828";
       } finally {
         button.disabled = false;
-        button.textContent = getString("prefs.testConnection") || "Test Connection";
+        button.textContent =
+          getString("prefs.testConnection") || "Test Connection";
       }
     });
 
@@ -489,26 +527,57 @@ function bindPrefEvents() {
 
 // ==================== Collection Tree Functions ====================
 
+interface EnabledCollectionPrefs {
+  ids: number[];
+  legacyPaths: string[];
+}
+
 /**
- * Get enabled collection paths from preferences
+ * Read enabled collection identities from preferences.
+ * Numeric IDs are current; path strings are migrated from older versions.
  */
-function getEnabledCollections(): string[] {
+function readEnabledCollectionPrefs(): EnabledCollectionPrefs {
   try {
     const enabledJson = getPref("enabledCollections") as string;
     if (!enabledJson || enabledJson === "undefined") {
-      return [];
+      return { ids: [], legacyPaths: [] };
     }
-    return JSON.parse(enabledJson);
+
+    const rawValues = JSON.parse(enabledJson);
+    const ids: number[] = [];
+    const legacyPaths: string[] = [];
+
+    if (!Array.isArray(rawValues)) {
+      return { ids, legacyPaths };
+    }
+
+    for (const value of rawValues) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        ids.push(value);
+      } else if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (/^\d+$/.test(trimmed)) {
+          ids.push(Number(trimmed));
+        } else if (trimmed) {
+          legacyPaths.push(trimmed);
+        }
+      }
+    }
+
+    return {
+      ids: Array.from(new Set(ids)),
+      legacyPaths: Array.from(new Set(legacyPaths)),
+    };
   } catch {
-    return [];
+    return { ids: [], legacyPaths: [] };
   }
 }
 
 /**
- * Save enabled collection paths to preferences
+ * Save enabled collection IDs to preferences
  */
-function setEnabledCollections(paths: string[]) {
-  setPref("enabledCollections", JSON.stringify(paths));
+function setEnabledCollections(ids: number[]) {
+  setPref("enabledCollections", JSON.stringify(Array.from(new Set(ids))));
 }
 
 /**
@@ -526,7 +595,7 @@ function buildCollectionNodeFromCollection(
     name: collection.name,
     path: path,
     parentID: collection.parentID || null,
-    children: childCollections.map(child =>
+    children: childCollections.map((child) =>
       buildCollectionNodeFromCollection(child, path)
     ),
   };
@@ -544,33 +613,57 @@ function buildCollectionNodes(
   // Find top-level collections (those without a parent)
   const topLevelCollections = collections.filter((c) => !c.parentID);
 
-  return topLevelCollections.map(col =>
+  return topLevelCollections.map((col) =>
     buildCollectionNodeFromCollection(col, "")
   );
 }
 
-/**
- * Get all paths from collection tree (flattened)
- */
-function getAllPaths(nodes: CollectionNode[]): string[] {
-  let paths: string[] = [];
+function flattenCollectionNodes(nodes: CollectionNode[]): CollectionNode[] {
+  let result: CollectionNode[] = [];
   for (const node of nodes) {
-    paths.push(node.path);
-    paths = paths.concat(getAllPaths(node.children));
+    result.push(node);
+    result = result.concat(flattenCollectionNodes(node.children));
   }
-  return paths;
+  return result;
 }
 
 /**
- * Get all descendant paths of a given path
+ * Get all IDs from collection tree (flattened)
  */
-function getDescendantPaths(nodes: CollectionNode[], targetPath: string): string[] {
-  for (const node of nodes) {
-    if (node.path === targetPath) {
-      return getAllPaths(node.children);
+function getAllIDs(nodes: CollectionNode[]): number[] {
+  return flattenCollectionNodes(nodes).map((node) => node.id);
+}
+
+function getEnabledCollectionIDs(nodes: CollectionNode[]): number[] {
+  const prefs = readEnabledCollectionPrefs();
+  const enabledIDs = new Set(prefs.ids);
+
+  if (prefs.legacyPaths.length > 0) {
+    const allNodes = flattenCollectionNodes(nodes);
+    for (const path of prefs.legacyPaths) {
+      for (const node of allNodes) {
+        if (node.path === path) {
+          enabledIDs.add(node.id);
+        }
+      }
     }
-    const found = getDescendantPaths(node.children, targetPath);
-    if (found.length > 0 || node.children.some(c => c.path === targetPath)) {
+
+    setEnabledCollections(Array.from(enabledIDs));
+  }
+
+  return Array.from(enabledIDs);
+}
+
+/**
+ * Get all descendant IDs of a given collection ID
+ */
+function getDescendantIDs(nodes: CollectionNode[], targetID: number): number[] {
+  for (const node of nodes) {
+    if (node.id === targetID) {
+      return getAllIDs(node.children);
+    }
+    const found = getDescendantIDs(node.children, targetID);
+    if (found.length > 0 || node.children.some((c) => c.id === targetID)) {
       return found;
     }
   }
@@ -578,22 +671,32 @@ function getDescendantPaths(nodes: CollectionNode[], targetPath: string): string
 }
 
 /**
- * Get all ancestor paths of a given path
+ * Get all ancestor IDs of a given collection ID
  */
-function getAncestorPaths(path: string): string[] {
-  const parts = path.split("/");
-  const ancestors: string[] = [];
-  let current = "";
-  for (let i = 0; i < parts.length - 1; i++) {
-    current = current ? `${current}/${parts[i]}` : parts[i];
-    ancestors.push(current);
+function getAncestorIDs(
+  nodes: CollectionNode[],
+  targetID: number,
+  ancestors: number[] = []
+): number[] {
+  for (const node of nodes) {
+    if (node.id === targetID) {
+      return ancestors;
+    }
+
+    const found = getAncestorIDs(node.children, targetID, [
+      ...ancestors,
+      node.id,
+    ]);
+    if (found.length > 0) {
+      return found;
+    }
   }
-  return ancestors;
+  return [];
 }
 
 // Store collection tree globally for the preference window
 let collectionTree: CollectionNode[] = [];
-let allCollectionPaths: string[] = [];
+let allCollectionIDs: number[] = [];
 
 /**
  * Check if collections have been initialized before
@@ -634,29 +737,31 @@ function loadCollectionTree() {
 
     // Build tree structure
     collectionTree = buildCollectionNodes(collections);
-    allCollectionPaths = getAllPaths(collectionTree);
+    allCollectionIDs = getAllIDs(collectionTree);
 
-    let enabledPaths = getEnabledCollections();
+    let enabledIDs = getEnabledCollectionIDs(collectionTree);
 
     // First time initialization: enable all collections
-    if (!isCollectionsInitialized() && allCollectionPaths.length > 0) {
-      enabledPaths = [...allCollectionPaths];
-      setEnabledCollections(enabledPaths);
+    if (!isCollectionsInitialized() && allCollectionIDs.length > 0) {
+      enabledIDs = [...allCollectionIDs];
+      setEnabledCollections(enabledIDs);
       markCollectionsInitialized();
     } else {
-      // Clean up stale paths (collections that no longer exist)
-      const validEnabledPaths = enabledPaths.filter(p => allCollectionPaths.includes(p));
+      // Clean up stale IDs (collections that no longer exist)
+      const validEnabledIDs = enabledIDs.filter((id) =>
+        allCollectionIDs.includes(id)
+      );
 
-      // Only update if paths were removed (don't add new paths automatically)
-      if (validEnabledPaths.length !== enabledPaths.length) {
-        setEnabledCollections(validEnabledPaths);
+      // Only update if IDs were removed (don't add new IDs automatically)
+      if (validEnabledIDs.length !== enabledIDs.length) {
+        setEnabledCollections(validEnabledIDs);
       }
 
-      enabledPaths = validEnabledPaths;
+      enabledIDs = validEnabledIDs;
     }
 
     // Render the tree with preserved user selections
-    renderCollectionTree(container, collectionTree, new Set(enabledPaths));
+    renderCollectionTree(container, collectionTree, new Set(enabledIDs));
   } catch (e: any) {
     const errorDiv = doc.createElement("div") as HTMLDivElement;
     errorDiv.style.color = "#c62828";
@@ -671,7 +776,7 @@ function loadCollectionTree() {
 function renderCollectionTree(
   container: HTMLDivElement,
   nodes: CollectionNode[],
-  enabledPaths: Set<string>,
+  enabledIDs: Set<number>,
   level: number = 0
 ) {
   const doc = container.ownerDocument;
@@ -686,20 +791,22 @@ function renderCollectionTree(
 
   for (const node of nodes) {
     const hasChildren = node.children.length > 0;
-    const isEnabled = enabledPaths.has(node.path);
+    const isEnabled = enabledIDs.has(node.id);
 
     // Create node container
     const nodeDiv = doc.createElement("div") as HTMLDivElement;
-    nodeDiv.setAttribute("data-path", node.path);
+    nodeDiv.setAttribute("data-collection-id", String(node.id));
     nodeDiv.style.cssText = `margin-left: ${level * 20}px; margin-bottom: 2px;`;
 
     // Create header row (toggle + checkbox + name)
     const headerDiv = doc.createElement("div") as HTMLDivElement;
-    headerDiv.style.cssText = "display: flex; align-items: center; padding: 2px 0;";
+    headerDiv.style.cssText =
+      "display: flex; align-items: center; padding: 2px 0;";
 
     // Toggle button for folders with children
     const toggleSpan = doc.createElement("span") as HTMLSpanElement;
-    toggleSpan.style.cssText = "width: 16px; cursor: pointer; user-select: none; font-size: 10px; opacity: 0.7;";
+    toggleSpan.style.cssText =
+      "width: 16px; cursor: pointer; user-select: none; font-size: 10px; opacity: 0.7;";
     if (hasChildren) {
       toggleSpan.textContent = "▶";
       toggleSpan.setAttribute("data-expanded", "false");
@@ -707,7 +814,9 @@ function renderCollectionTree(
         const expanded = toggleSpan.getAttribute("data-expanded") === "true";
         toggleSpan.setAttribute("data-expanded", String(!expanded));
         toggleSpan.textContent = expanded ? "▶" : "▼";
-        const childrenContainer = nodeDiv.querySelector(".children-container") as HTMLDivElement;
+        const childrenContainer = nodeDiv.querySelector(
+          ".children-container"
+        ) as HTMLDivElement;
         if (childrenContainer) {
           childrenContainer.style.display = expanded ? "none" : "block";
         }
@@ -721,10 +830,10 @@ function renderCollectionTree(
     const checkbox = doc.createElement("input") as HTMLInputElement;
     checkbox.type = "checkbox";
     checkbox.checked = isEnabled;
-    checkbox.setAttribute("data-path", node.path);
+    checkbox.setAttribute("data-collection-id", String(node.id));
     checkbox.style.cssText = "margin: 0 5px 0 0; cursor: pointer;";
     checkbox.addEventListener("change", () => {
-      handleCheckboxChange(node.path, checkbox.checked);
+      handleCheckboxChange(node.id, checkbox.checked);
     });
     headerDiv.appendChild(checkbox);
 
@@ -744,7 +853,12 @@ function renderCollectionTree(
       nodeDiv.appendChild(childrenContainer);
 
       // Recursively render children
-      renderCollectionTree(childrenContainer, node.children, enabledPaths, level + 1);
+      renderCollectionTree(
+        childrenContainer,
+        node.children,
+        enabledIDs,
+        level + 1
+      );
     }
 
     container.appendChild(nodeDiv);
@@ -754,58 +868,58 @@ function renderCollectionTree(
 /**
  * Handle checkbox change with parent-child cascading logic
  */
-function handleCheckboxChange(path: string, checked: boolean) {
+function handleCheckboxChange(collectionID: number, checked: boolean) {
   const win = addon.data.prefs!.window;
   const doc = win.document;
 
-  let enabledPaths = new Set(getEnabledCollections());
+  const enabledIDs = new Set(getEnabledCollectionIDs(collectionTree));
 
   if (checked) {
-    // When checking: enable this path and all ancestors
-    enabledPaths.add(path);
+    // When checking: enable this collection and all ancestors
+    enabledIDs.add(collectionID);
 
     // Enable all ancestors to ensure path integrity
-    const ancestors = getAncestorPaths(path);
+    const ancestors = getAncestorIDs(collectionTree, collectionID);
     for (const ancestor of ancestors) {
-      enabledPaths.add(ancestor);
+      enabledIDs.add(ancestor);
     }
 
     // Enable all descendants
-    const descendants = getDescendantPaths(collectionTree, path);
+    const descendants = getDescendantIDs(collectionTree, collectionID);
     for (const desc of descendants) {
-      enabledPaths.add(desc);
+      enabledIDs.add(desc);
     }
   } else {
-    // When unchecking: disable this path and all descendants
-    enabledPaths.delete(path);
+    // When unchecking: disable this collection and all descendants
+    enabledIDs.delete(collectionID);
 
     // Disable all descendants
-    const descendants = getDescendantPaths(collectionTree, path);
+    const descendants = getDescendantIDs(collectionTree, collectionID);
     for (const desc of descendants) {
-      enabledPaths.delete(desc);
+      enabledIDs.delete(desc);
     }
   }
 
   // Save to preferences
-  setEnabledCollections(Array.from(enabledPaths));
+  setEnabledCollections(Array.from(enabledIDs));
 
   // Update UI checkboxes
-  updateCheckboxStates(doc, enabledPaths);
+  updateCheckboxStates(doc, enabledIDs);
 }
 
 /**
  * Update all checkbox states in the UI
  */
-function updateCheckboxStates(doc: Document, enabledPaths: Set<string>) {
+function updateCheckboxStates(doc: Document, enabledIDs: Set<number>) {
   const checkboxes = doc.querySelectorAll(
     `#zotero-prefpane-${config.addonRef}-collectionTree input[type="checkbox"]`
   );
 
   checkboxes.forEach((cb) => {
     const checkbox = cb as HTMLInputElement;
-    const path = checkbox.getAttribute("data-path");
-    if (path) {
-      checkbox.checked = enabledPaths.has(path);
+    const collectionID = Number(checkbox.getAttribute("data-collection-id"));
+    if (Number.isFinite(collectionID)) {
+      checkbox.checked = enabledIDs.has(collectionID);
     }
   });
 }
@@ -817,8 +931,8 @@ function selectAllCollections() {
   const win = addon.data.prefs!.window;
   const doc = win.document;
 
-  setEnabledCollections([...allCollectionPaths]);
-  updateCheckboxStates(doc, new Set(allCollectionPaths));
+  setEnabledCollections([...allCollectionIDs]);
+  updateCheckboxStates(doc, new Set(allCollectionIDs));
 }
 
 /**

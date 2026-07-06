@@ -1,9 +1,26 @@
 import { config } from "../../package.json";
-import { callAI } from "./api";
+import { AICollectionCandidate, callAI } from "./api";
 import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
 
 const PATH_SEPARATOR = "/";
+
+interface CollectionOption extends AICollectionCandidate {
+  collection: Zotero.Collection;
+  segments: string[];
+  ancestors: Zotero.Collection[];
+}
+
+interface CollectionNode {
+  option: CollectionOption;
+  children: CollectionNode[];
+}
+
+interface EnabledCollections {
+  ids: Set<number>;
+  paths: Set<string>;
+  allEnabledByDefault: boolean;
+}
 
 /**
  * Batch processing result for a single item
@@ -12,205 +29,241 @@ interface BatchItemResult {
   item: Zotero.Item;
   title: string;
   chineseTitle?: string;
-  validPaths: string[];
-  selectedPaths: string[];
+  validOptions: CollectionOption[];
+  selectedOptionIDs: number[];
   action: "pending" | "confirm" | "reject" | "archive";
   error?: string;
 }
 
 /**
- * Get enabled collection paths from preferences
+ * Get enabled collection identities from preferences.
+ * Numeric IDs are the current format; paths are kept only for older saved settings.
  */
-function getEnabledCollections(): Set<string> {
+function getEnabledCollections(): EnabledCollections {
   try {
     const enabledJson = getPref("enabledCollections") as string;
     if (!enabledJson || enabledJson === "undefined") {
-      return new Set(); // Empty set means all enabled (first time use)
+      return {
+        ids: new Set(),
+        paths: new Set(),
+        allEnabledByDefault: true,
+      };
     }
-    return new Set(JSON.parse(enabledJson));
+    const rawValues = JSON.parse(enabledJson);
+    const ids = new Set<number>();
+    const paths = new Set<string>();
+
+    if (Array.isArray(rawValues)) {
+      for (const value of rawValues) {
+        if (typeof value === "number" && Number.isFinite(value)) {
+          ids.add(value);
+        } else if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (/^\d+$/.test(trimmed)) {
+            ids.add(Number(trimmed));
+          } else if (trimmed) {
+            paths.add(trimmed);
+          }
+        }
+      }
+    }
+
+    return {
+      ids,
+      paths,
+      allEnabledByDefault: false,
+    };
   } catch {
-    return new Set();
+    return {
+      ids: new Set(),
+      paths: new Set(),
+      allEnabledByDefault: true,
+    };
   }
 }
 
-/**
- * Build collection paths recursively from a single collection
- * @param collection - The collection to process
- * @param prefix - Path prefix
- * @returns Array of collection paths (this collection and all descendants)
- */
-function buildPathsFromCollection(
+function buildNodeFromCollection(
   collection: Zotero.Collection,
-  prefix: string = ""
-): string[] {
-  const path = prefix ? `${prefix}/${collection.name}` : collection.name;
-  let result: string[] = [path];
+  parentSegments: string[] = [],
+  ancestors: Zotero.Collection[] = []
+): CollectionNode {
+  const segments = [...parentSegments, collection.name];
+  const option: CollectionOption = {
+    id: collection.id,
+    path: segments.join(PATH_SEPARATOR),
+    collection,
+    segments,
+    ancestors,
+  };
 
-  // Use getChildCollections() to get actual child collections
-  const children = collection.getChildCollections(false);
-  for (const child of children) {
-    result = result.concat(buildPathsFromCollection(child, path));
+  return {
+    option,
+    children: collection
+      .getChildCollections(false)
+      .map((child) =>
+        buildNodeFromCollection(child, segments, [...ancestors, collection])
+      ),
+  };
+}
+
+function buildCollectionNodes(
+  collections: Zotero.Collection[]
+): CollectionNode[] {
+  return collections
+    .filter((col) => !col.parentID)
+    .map((col) => buildNodeFromCollection(col));
+}
+
+function flattenNodes(nodes: CollectionNode[]): CollectionNode[] {
+  let result: CollectionNode[] = [];
+  for (const node of nodes) {
+    result.push(node);
+    result = result.concat(flattenNodes(node.children));
   }
-
   return result;
 }
 
-/**
- * Build collection tree structure as paths (all collections)
- * Uses getChildCollections() for reliable parent-child relationships
- * @param collections - Top-level collections from getByLibrary()
- * @param _parentID - Unused, kept for API compatibility
- * @param _prefix - Unused, kept for API compatibility
- * @returns Array of all collection paths including nested children
- */
-function buildAllCollectionPaths(
-  collections: Zotero.Collection[],
-  _parentID: number | null = null,
-  _prefix: string = ""
-): string[] {
-  let result: string[] = [];
-
-  // collections from getByLibrary() are top-level only
-  // Use getChildCollections() to recursively get all descendants
-  for (const col of collections) {
-    // Only process top-level collections (parentID is false or falsy in Zotero 7)
-    if (!col.parentID) {
-      result = result.concat(buildPathsFromCollection(col, ""));
-    }
-  }
-
-  return result;
+function isNodeEnabled(
+  node: CollectionNode,
+  enabledCollections: EnabledCollections
+): boolean {
+  return (
+    enabledCollections.ids.has(node.option.id) ||
+    enabledCollections.paths.has(node.option.path)
+  );
 }
 
-/**
- * Check if a path has any enabled children
- * @param path - The path to check
- * @param enabledCollections - Set of enabled collection paths
- * @returns true if the path has enabled children
- */
-function hasEnabledChildren(path: string, enabledCollections: Set<string>): boolean {
-  const prefix = path + "/";
-  for (const enabledPath of enabledCollections) {
-    if (enabledPath.startsWith(prefix)) {
+function hasEnabledDescendant(
+  node: CollectionNode,
+  enabledCollections: EnabledCollections
+): boolean {
+  for (const child of node.children) {
+    if (
+      isNodeEnabled(child, enabledCollections) ||
+      hasEnabledDescendant(child, enabledCollections)
+    ) {
       return true;
     }
   }
   return false;
 }
 
-/**
- * Build collection tree structure as paths, filtered by enabled collections
- * Returns actual leaf nodes (deepest paths) for each enabled subtree
- * @param collections - All collections in library
- * @param parentID - Parent collection ID (null for root)
- * @param prefix - Path prefix
- * @returns Array of leaf collection paths within enabled subtrees
- */
-export function buildCollectionTree(
-  collections: Zotero.Collection[],
-  parentID: number | null = null,
-  prefix: string = ""
-): string[] {
-  const enabledCollections = getEnabledCollections();
-  const allPaths = buildAllCollectionPaths(collections, parentID, prefix);
-
-  // Helper: check if a path is an actual leaf (has no children in allPaths)
-  const isActualLeaf = (path: string): boolean => {
-    const pathPrefix = path + "/";
-    return !allPaths.some((p) => p.startsWith(pathPrefix));
-  };
-
-  // Helper: get all actual leaf descendants of a path (including itself if it's a leaf)
-  const getLeafDescendants = (basePath: string): string[] => {
-    const pathPrefix = basePath + "/";
-    const descendants = allPaths.filter(
-      (p) => p === basePath || p.startsWith(pathPrefix)
-    );
-    return descendants.filter(isActualLeaf);
-  };
-
-  // If no enabled collections stored yet (first time), return all leaf nodes
-  if (enabledCollections.size === 0) {
-    return allPaths.filter(isActualLeaf);
+function getLeafOptions(node: CollectionNode): CollectionOption[] {
+  if (node.children.length === 0) {
+    return [node.option];
   }
 
-  // For each enabled path without enabled children, expand to its actual leaf descendants
-  const result: Set<string> = new Set();
-
-  for (const path of allPaths) {
-    if (!enabledCollections.has(path)) {
-      continue;
-    }
-
-    // Skip paths that have enabled children (they'll be handled when we reach those children)
-    if (hasEnabledChildren(path, enabledCollections)) {
-      continue;
-    }
-
-    // Get all actual leaf descendants and add them
-    for (const leaf of getLeafDescendants(path)) {
-      result.add(leaf);
-    }
+  let options: CollectionOption[] = [];
+  for (const child of node.children) {
+    options = options.concat(getLeafOptions(child));
   }
-
-  return Array.from(result);
+  return options;
 }
 
 /**
- * Get collection by path string
- * Uses smart matching to handle collection names containing "/"
- * @param pathStr - Collection path like "Parent/Child"
- * @param allCollections - Top-level collections from getByLibrary()
- * @returns Collection object or null
+ * Build collection options, filtered by enabled collections.
+ * Returns actual leaf nodes (deepest paths) for each enabled subtree
  */
-export function getCollectionByPath(
-  pathStr: string,
-  allCollections: Zotero.Collection[]
-): Zotero.Collection | null {
-  // Try to find a matching collection by traversing the tree
-  // This handles cases where collection names contain "/"
+function buildCollectionOptions(
+  collections: Zotero.Collection[]
+): CollectionOption[] {
+  const enabledCollections = getEnabledCollections();
+  const tree = buildCollectionNodes(collections);
+  const allNodes = flattenNodes(tree);
 
-  function findInChildren(
-    remainingPath: string,
-    collections: Zotero.Collection[]
-  ): Zotero.Collection | null {
-    if (!remainingPath) return null;
-
-    // Try each possible split point (greedy match - try longest name first)
-    // This handles names like "Aerial Manipulation/Contact"
-    for (let i = remainingPath.length; i > 0; i--) {
-      const possibleName = remainingPath.substring(0, i);
-      const rest = remainingPath.substring(i);
-
-      // Check if rest starts with "/" or is empty
-      if (rest && !rest.startsWith("/")) continue;
-
-      // Remove leading "/" from rest
-      const nextPath = rest.startsWith("/") ? rest.substring(1) : rest;
-
-      // Find collection with this name
-      const match = collections.find(
-        (c) => c.name.toLowerCase() === possibleName.toLowerCase()
-      );
-
-      if (match) {
-        if (!nextPath) {
-          // Found the target collection
-          return match;
-        }
-        // Continue searching in children
-        const children = match.getChildCollections(false);
-        const result = findInChildren(nextPath, children);
-        if (result) return result;
-      }
-    }
-
-    return null;
+  // If no enabled collections stored yet (first time), return all leaf nodes
+  if (enabledCollections.allEnabledByDefault) {
+    return allNodes
+      .filter((node) => node.children.length === 0)
+      .map((node) => node.option);
   }
 
-  // Start with top-level collections only
-  const topLevel = allCollections.filter((c) => !c.parentID);
-  return findInChildren(pathStr, topLevel);
+  const result = new Map<number, CollectionOption>();
+
+  for (const node of allNodes) {
+    if (!isNodeEnabled(node, enabledCollections)) {
+      continue;
+    }
+
+    // Skip enabled ancestors; the deepest enabled nodes define the candidate subtrees.
+    if (hasEnabledDescendant(node, enabledCollections)) {
+      continue;
+    }
+
+    for (const leaf of getLeafOptions(node)) {
+      result.set(leaf.id, leaf);
+    }
+  }
+
+  return Array.from(result.values());
+}
+
+export function buildCollectionTree(
+  collections: Zotero.Collection[]
+): string[] {
+  return buildCollectionOptions(collections).map((option) => option.path);
+}
+
+function normalizePathForMatch(path: string): string {
+  return path.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function findOptionByPath(
+  path: string,
+  collectionOptions: CollectionOption[]
+): CollectionOption | null {
+  const exactMatch = collectionOptions.find((option) => option.path === path);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const caseInsensitiveMatches = collectionOptions.filter(
+    (option) => option.path.toLowerCase() === path.trim().toLowerCase()
+  );
+  if (caseInsensitiveMatches.length === 1) {
+    return caseInsensitiveMatches[0];
+  }
+
+  const normalizedPath = normalizePathForMatch(path);
+  const normalizedMatches = collectionOptions.filter(
+    (option) => normalizePathForMatch(option.path) === normalizedPath
+  );
+  return normalizedMatches.length === 1 ? normalizedMatches[0] : null;
+}
+
+function resolveAICollectionOptions(
+  aiResult: { collectionIDs: number[]; collections: string[] },
+  collectionOptions: CollectionOption[]
+): CollectionOption[] {
+  const optionByID = new Map(
+    collectionOptions.map((option) => [option.id, option])
+  );
+  const resolved = new Map<number, CollectionOption>();
+
+  for (const id of aiResult.collectionIDs || []) {
+    const option = optionByID.get(id);
+    if (option) {
+      resolved.set(option.id, option);
+    }
+  }
+
+  for (const path of aiResult.collections || []) {
+    const option = findOptionByPath(path, collectionOptions);
+    if (option) {
+      resolved.set(option.id, option);
+    }
+  }
+
+  return Array.from(resolved.values());
+}
+
+function getCollectionsToAdd(
+  option: CollectionOption,
+  addToAllPath: boolean
+): Zotero.Collection[] {
+  return addToAllPath
+    ? [...option.ancestors, option.collection]
+    : [option.collection];
 }
 
 /**
@@ -269,22 +322,6 @@ async function getOrCreateArchiveCollection(
 }
 
 /**
- * Parse hierarchical path into parent/child components
- * @param path - Full collection path like "Parent/Child/GrandChild"
- * @returns Array of partial paths from root to full path
- */
-function getHierarchicalPaths(path: string): string[] {
-  const parts = path.split(PATH_SEPARATOR);
-  const paths: string[] = [];
-  let current = "";
-  for (const part of parts) {
-    current = current ? `${current}/${part}` : part;
-    paths.push(current);
-  }
-  return paths;
-}
-
-/**
  * Show classification confirmation dialog with interactive checkboxes
  * Uses ztoolkit.Dialog for interactive selection
  * @returns action: "confirm" | "reject" | "archive" - user's choice
@@ -292,29 +329,34 @@ function getHierarchicalPaths(path: string): string[] {
 async function showClassificationDialog(
   title: string,
   chineseTitle: string | undefined,
-  validPaths: string[],
-  _allCollections: Zotero.Collection[]
-): Promise<{ action: "confirm" | "reject" | "archive" | "cancel"; selectedPaths: string[] }> {
+  validOptions: CollectionOption[]
+): Promise<{
+  action: "confirm" | "reject" | "archive" | "cancel";
+  selectedOptionIDs: number[];
+}> {
   return new Promise((resolve) => {
     // Track whether the promise has been resolved (to avoid duplicate resolution)
     let resolved = false;
-    const safeResolve = (result: { action: "confirm" | "reject" | "archive" | "cancel"; selectedPaths: string[] }) => {
+    const safeResolve = (result: {
+      action: "confirm" | "reject" | "archive" | "cancel";
+      selectedOptionIDs: number[];
+    }) => {
       if (!resolved) {
         resolved = true;
         resolve(result);
       }
     };
 
-    // Track selected paths
-    const selectedPaths: Record<string, boolean> = {};
-
-    // Initialize all paths as selected by default
-    for (const path of validPaths) {
-      selectedPaths[path] = true;
-    }
+    const selectedOptionIDs = new Set(validOptions.map((option) => option.id));
 
     // Build rows for the dialog (no color styles for dark mode compatibility)
-    const rows: Array<{ tag: string; namespace?: string; attributes?: Record<string, string>; properties?: Record<string, unknown>; children?: unknown[] }> = [];
+    const rows: Array<{
+      tag: string;
+      namespace?: string;
+      attributes?: Record<string, string>;
+      properties?: Record<string, unknown>;
+      children?: unknown[];
+    }> = [];
 
     // Title row
     rows.push({
@@ -335,50 +377,59 @@ async function showClassificationDialog(
     // Separator
     rows.push({
       tag: "div",
-      attributes: { style: "border-top: 1px solid currentColor; opacity: 0.3; margin: 8px 0;" },
+      attributes: {
+        style:
+          "border-top: 1px solid currentColor; opacity: 0.3; margin: 8px 0;",
+      },
     });
 
     // Recommended collections label
     rows.push({
       tag: "div",
       attributes: { style: "font-weight: bold; margin-bottom: 8px;" },
-      properties: { innerText: getString("dialog.recommendedCollections") || "推荐分类:" },
+      properties: {
+        innerText: getString("dialog.recommendedCollections") || "推荐分类:",
+      },
     });
 
-    // Create checkbox for each path with hierarchical display
-    for (const fullPath of validPaths) {
-      const hierarchicalPaths = getHierarchicalPaths(fullPath);
-
+    // Create checkbox for each option with hierarchical display
+    for (const option of validOptions) {
       // Show hierarchy as context (parent folders)
-      const parentPaths = hierarchicalPaths.slice(0, -1);
-      if (parentPaths.length > 0) {
-        const parentDisplay = parentPaths.map((p, i) => {
-          const parts = p.split(PATH_SEPARATOR);
-          const name = parts[parts.length - 1];
-          return "  ".repeat(i) + "📂 " + name;
-        }).join("\n");
+      const parentSegments = option.segments.slice(0, -1);
+      if (parentSegments.length > 0) {
+        const parentDisplay = parentSegments
+          .map((name, i) => {
+            return "  ".repeat(i) + "📂 " + name;
+          })
+          .join("\n");
 
         rows.push({
           tag: "div",
-          attributes: { style: "opacity: 0.6; font-size: 12px; white-space: pre-wrap; margin-left: 20px;" },
+          attributes: {
+            style:
+              "opacity: 0.6; font-size: 12px; white-space: pre-wrap; margin-left: 20px;",
+          },
           properties: { innerText: parentDisplay },
         });
       }
 
       // Leaf node with checkbox
-      const leafName = fullPath.split(PATH_SEPARATOR).pop() || fullPath;
-      const indent = "  ".repeat(hierarchicalPaths.length - 1);
+      const leafName =
+        option.segments[option.segments.length - 1] || option.path;
+      const indent = "  ".repeat(option.segments.length - 1);
 
       rows.push({
         tag: "div",
-        attributes: { style: "display: flex; align-items: center; margin: 4px 0 8px 20px;" },
+        attributes: {
+          style: "display: flex; align-items: center; margin: 4px 0 8px 20px;",
+        },
         children: [
           {
             tag: "input",
             namespace: "html",
             attributes: {
               type: "checkbox",
-              "data-path": fullPath,
+              "data-option-id": String(option.id),
               style: "margin-right: 8px;",
             },
             properties: {
@@ -389,9 +440,15 @@ async function showClassificationDialog(
                 type: "change",
                 listener: (e: Event) => {
                   const target = e.target as HTMLInputElement;
-                  const path = target.getAttribute("data-path");
-                  if (path) {
-                    selectedPaths[path] = target.checked;
+                  const optionID = Number(
+                    target.getAttribute("data-option-id")
+                  );
+                  if (Number.isFinite(optionID)) {
+                    if (target.checked) {
+                      selectedOptionIDs.add(optionID);
+                    } else {
+                      selectedOptionIDs.delete(optionID);
+                    }
                   }
                 },
               },
@@ -410,7 +467,10 @@ async function showClassificationDialog(
     rows.push({
       tag: "div",
       attributes: { style: "opacity: 0.7; margin-top: 12px; font-size: 12px;" },
-      properties: { innerText: getString("dialog.helpText") || "勾选要添加的分类，然后点击确认" },
+      properties: {
+        innerText:
+          getString("dialog.helpText") || "勾选要添加的分类，然后点击确认",
+      },
     });
 
     // Create dialog
@@ -425,20 +485,24 @@ async function showClassificationDialog(
     dialogHelper
       .addButton(getString("dialog.confirm") || "确认", "confirm", {
         callback: () => {
-          const selected = Object.entries(selectedPaths)
-            .filter(([_, checked]) => checked)
-            .map(([path, _]) => path);
-          safeResolve({ action: "confirm", selectedPaths: selected });
+          safeResolve({
+            action: "confirm",
+            selectedOptionIDs: Array.from(selectedOptionIDs),
+          });
         },
       })
-      .addButton(getString("dialog.rejectAndArchive") || "拒绝并移至归档", "archive", {
-        callback: () => {
-          safeResolve({ action: "archive", selectedPaths: [] });
-        },
-      })
+      .addButton(
+        getString("dialog.rejectAndArchive") || "拒绝并移至归档",
+        "archive",
+        {
+          callback: () => {
+            safeResolve({ action: "archive", selectedOptionIDs: [] });
+          },
+        }
+      )
       .addButton(getString("dialog.cancel") || "拒绝添加", "cancel", {
         callback: () => {
-          safeResolve({ action: "reject", selectedPaths: [] });
+          safeResolve({ action: "reject", selectedOptionIDs: [] });
         },
       })
       // Handle window close button (X) - resolve as cancel to stop entire process
@@ -448,13 +512,16 @@ async function showClassificationDialog(
           if (dialogHelper.window) {
             dialogHelper.window.addEventListener("unload", () => {
               ztoolkit.log("[AI Classifier] Window unload event triggered");
-              safeResolve({ action: "cancel", selectedPaths: [] });
+              safeResolve({ action: "cancel", selectedOptionIDs: [] });
             });
           }
         },
         beforeUnloadCallback: () => {
-          ztoolkit.log("[AI Classifier] beforeUnloadCallback triggered, resolved=", resolved);
-          safeResolve({ action: "cancel", selectedPaths: [] });
+          ztoolkit.log(
+            "[AI Classifier] beforeUnloadCallback triggered, resolved=",
+            resolved
+          );
+          safeResolve({ action: "cancel", selectedOptionIDs: [] });
         },
       })
       .open(getString("dialog.title") || "AI 分类确认", {
@@ -476,10 +543,13 @@ async function showBatchClassificationDialog(
 ): Promise<BatchItemResult[]> {
   return new Promise((resolve) => {
     // Track states for each item
-    const itemStates: Map<number, {
-      action: "pending" | "confirm" | "reject" | "archive";
-      selectedPaths: Set<string>;
-    }> = new Map();
+    const itemStates: Map<
+      number,
+      {
+        action: "pending" | "confirm" | "reject" | "archive";
+        selectedOptionIDs: Set<number>;
+      }
+    > = new Map();
 
     // Store results for access in event handlers
     const resultsMap: Map<number, BatchItemResult> = new Map();
@@ -487,15 +557,17 @@ async function showBatchClassificationDialog(
     // Initialize states
     for (const result of results) {
       resultsMap.set(result.item.id, result);
-      if (result.error) {
+      if (result.error || result.validOptions.length === 0) {
         itemStates.set(result.item.id, {
           action: "reject",
-          selectedPaths: new Set(),
+          selectedOptionIDs: new Set(),
         });
       } else {
         itemStates.set(result.item.id, {
           action: "confirm",
-          selectedPaths: new Set(result.validPaths),
+          selectedOptionIDs: new Set(
+            result.validOptions.map((option) => option.id)
+          ),
         });
       }
     }
@@ -505,7 +577,9 @@ async function showBatchClassificationDialog(
       const state = itemStates.get(itemId);
       if (!state) return;
 
-      const statusEl = doc.querySelector(`[data-item-id="${itemId}"][data-status="true"]`);
+      const statusEl = doc.querySelector(
+        `[data-item-id="${itemId}"][data-status="true"]`
+      );
       if (statusEl) {
         let statusText = "";
         switch (state.action) {
@@ -523,33 +597,44 @@ async function showBatchClassificationDialog(
       }
 
       // Update checkboxes visibility based on action
-      const collectionsEl = doc.querySelector(`[data-item-id="${itemId}"][data-collections="true"]`);
+      const collectionsEl = doc.querySelector(
+        `[data-item-id="${itemId}"][data-collections="true"]`
+      );
       if (collectionsEl) {
-        (collectionsEl as HTMLElement).style.opacity = state.action === "confirm" ? "1" : "0.4";
+        (collectionsEl as HTMLElement).style.opacity =
+          state.action === "confirm" ? "1" : "0.4";
       }
 
       // Update checkbox states
-      const checkboxes = doc.querySelectorAll(`input[data-item-id="${itemId}"][data-path]`);
+      const checkboxes = doc.querySelectorAll(
+        `input[data-item-id="${itemId}"][data-option-id]`
+      );
       checkboxes.forEach((cb) => {
         const checkbox = cb as HTMLInputElement;
-        const path = checkbox.getAttribute("data-path");
-        if (path) {
-          checkbox.checked = state.selectedPaths.has(path);
+        const optionID = Number(checkbox.getAttribute("data-option-id"));
+        if (Number.isFinite(optionID)) {
+          checkbox.checked = state.selectedOptionIDs.has(optionID);
         }
       });
     };
 
     // Create button click handler factory
-    const createButtonClickHandler = (dialog: any, itemId: number, action: "confirm" | "reject" | "archive") => {
+    const createButtonClickHandler = (
+      dialog: any,
+      itemId: number,
+      action: "confirm" | "reject" | "archive"
+    ) => {
       return () => {
         const state = itemStates.get(itemId);
         const result = resultsMap.get(itemId);
         if (state && result) {
           state.action = action;
           if (action === "confirm") {
-            state.selectedPaths = new Set(result.validPaths);
+            state.selectedOptionIDs = new Set(
+              result.validOptions.map((option) => option.id)
+            );
           } else {
-            state.selectedPaths.clear();
+            state.selectedOptionIDs.clear();
           }
           if (dialog.window?.document) {
             updateItemDisplay(dialog.window.document, itemId);
@@ -559,17 +644,24 @@ async function showBatchClassificationDialog(
     };
 
     // Create checkbox change handler factory
-    const createCheckboxChangeHandler = (dialog: any, itemId: number, path: string) => {
+    const createCheckboxChangeHandler = (
+      dialog: any,
+      itemId: number,
+      optionID: number
+    ) => {
       return (e: Event) => {
         const checkbox = e.target as HTMLInputElement;
         const state = itemStates.get(itemId);
         if (state) {
           if (checkbox.checked) {
-            state.selectedPaths.add(path);
+            state.selectedOptionIDs.add(optionID);
             state.action = "confirm";
           } else {
-            state.selectedPaths.delete(path);
-            if (state.selectedPaths.size === 0 && state.action === "confirm") {
+            state.selectedOptionIDs.delete(optionID);
+            if (
+              state.selectedOptionIDs.size === 0 &&
+              state.action === "confirm"
+            ) {
               state.action = "reject";
             }
           }
@@ -590,14 +682,20 @@ async function showBatchClassificationDialog(
     rows.push({
       tag: "div",
       styles: { fontWeight: "bold", marginBottom: "12px", fontSize: "14px" },
-      properties: { innerText: `📚 ${getString("dialog.batchTitle") || "AI 批量分类确认"} (${results.length} ${results.length > 1 ? "items" : "item"})` },
+      properties: {
+        innerText: `📚 ${
+          getString("dialog.batchTitle") || "AI 批量分类确认"
+        } (${results.length} ${results.length > 1 ? "items" : "item"})`,
+      },
     });
 
     // Help text
     rows.push({
       tag: "div",
       styles: { opacity: "0.7", marginBottom: "12px", fontSize: "12px" },
-      properties: { innerText: getString("dialog.batchHelpText") || "为每篇文献选择操作" },
+      properties: {
+        innerText: getString("dialog.batchHelpText") || "为每篇文献选择操作",
+      },
     });
 
     // Build items container children
@@ -612,7 +710,11 @@ async function showBatchClassificationDialog(
         {
           tag: "div",
           styles: { fontWeight: "bold", wordWrap: "break-word" },
-          properties: { innerText: `${i + 1}. 📄 ${result.title.slice(0, 60)}${result.title.length > 60 ? "..." : ""}` },
+          properties: {
+            innerText: `${i + 1}. 📄 ${result.title.slice(0, 60)}${
+              result.title.length > 60 ? "..." : ""
+            }`,
+          },
         },
       ];
 
@@ -631,15 +733,31 @@ async function showBatchClassificationDialog(
           styles: { padding: "2px 6px", fontSize: "10px", cursor: "pointer" },
           properties: { textContent: getString("dialog.accept") || "接受" },
           listeners: [
-            { type: "click", listener: createButtonClickHandler(dialogHelper, itemId, "confirm") },
+            {
+              type: "click",
+              listener: createButtonClickHandler(
+                dialogHelper,
+                itemId,
+                "confirm"
+              ),
+            },
           ],
         },
         {
           tag: "button",
           styles: { padding: "2px 6px", fontSize: "10px", cursor: "pointer" },
-          properties: { textContent: getString("dialog.rejectAndArchive") || "拒绝并归档" },
+          properties: {
+            textContent: getString("dialog.rejectAndArchive") || "拒绝并归档",
+          },
           listeners: [
-            { type: "click", listener: createButtonClickHandler(dialogHelper, itemId, "archive") },
+            {
+              type: "click",
+              listener: createButtonClickHandler(
+                dialogHelper,
+                itemId,
+                "archive"
+              ),
+            },
           ],
         },
         {
@@ -647,7 +765,14 @@ async function showBatchClassificationDialog(
           styles: { padding: "2px 6px", fontSize: "10px", cursor: "pointer" },
           properties: { textContent: getString("dialog.reject") || "拒绝" },
           listeners: [
-            { type: "click", listener: createButtonClickHandler(dialogHelper, itemId, "reject") },
+            {
+              type: "click",
+              listener: createButtonClickHandler(
+                dialogHelper,
+                itemId,
+                "reject"
+              ),
+            },
           ],
         },
       ];
@@ -655,7 +780,12 @@ async function showBatchClassificationDialog(
       // Header row with title and buttons
       const headerRow: any = {
         tag: "div",
-        styles: { display: "flex", alignItems: "flex-start", gap: "8px", marginBottom: "6px" },
+        styles: {
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "8px",
+          marginBottom: "6px",
+        },
         children: [
           {
             tag: "div",
@@ -680,25 +810,36 @@ async function showBatchClassificationDialog(
           styles: { color: "#cc0000", fontSize: "12px", margin: "4px 0" },
           properties: { innerText: `⚠️ ${result.error}` },
         });
-      } else if (result.validPaths.length > 0) {
+      } else if (result.validOptions.length > 0) {
         const collectionItems: any[] = [];
-        for (const path of result.validPaths) {
+        for (const option of result.validOptions) {
           collectionItems.push({
             tag: "div",
             styles: { display: "flex", alignItems: "center", margin: "2px 0" },
             children: [
               {
                 tag: "input",
-                attributes: { type: "checkbox" },
+                attributes: {
+                  type: "checkbox",
+                  "data-item-id": String(itemId),
+                  "data-option-id": String(option.id),
+                },
                 properties: { checked: true },
                 styles: { marginRight: "6px" },
                 listeners: [
-                  { type: "change", listener: createCheckboxChangeHandler(dialogHelper, itemId, path) },
+                  {
+                    type: "change",
+                    listener: createCheckboxChangeHandler(
+                      dialogHelper,
+                      itemId,
+                      option.id
+                    ),
+                  },
                 ],
               },
               {
                 tag: "span",
-                properties: { innerText: `📁 ${path}` },
+                properties: { innerText: `📁 ${option.path}` },
               },
             ],
           });
@@ -706,7 +847,10 @@ async function showBatchClassificationDialog(
 
         itemBoxChildren.push({
           tag: "div",
-          attributes: { "data-item-id": String(itemId), "data-collections": "true" },
+          attributes: {
+            "data-item-id": String(itemId),
+            "data-collections": "true",
+          },
           styles: { marginLeft: "20px", fontSize: "12px" },
           children: collectionItems,
         });
@@ -714,7 +858,10 @@ async function showBatchClassificationDialog(
         itemBoxChildren.push({
           tag: "div",
           styles: { opacity: "0.6", fontSize: "12px", marginLeft: "20px" },
-          properties: { innerText: getString("error.noclassification") || "未找到合适的分类" },
+          properties: {
+            innerText:
+              getString("error.noclassification") || "未找到合适的分类",
+          },
         });
       }
 
@@ -730,7 +877,12 @@ async function showBatchClassificationDialog(
       itemChildren.push({
         tag: "div",
         attributes: { "data-item-id": String(itemId) },
-        styles: { borderBottom: "1px solid currentColor", opacity: "0.8", padding: "10px 0", marginBottom: "8px" },
+        styles: {
+          borderBottom: "1px solid currentColor",
+          opacity: "0.8",
+          padding: "10px 0",
+          marginBottom: "8px",
+        },
         children: itemBoxChildren,
       });
     }
@@ -761,9 +913,11 @@ async function showBatchClassificationDialog(
           // Set all to confirm first, then build results
           for (const result of results) {
             const state = itemStates.get(result.item.id);
-            if (state && !result.error) {
+            if (state && !result.error && result.validOptions.length > 0) {
               state.action = "confirm";
-              state.selectedPaths = new Set(result.validPaths);
+              state.selectedOptionIDs = new Set(
+                result.validOptions.map((option) => option.id)
+              );
             }
           }
           const finalResults = results.map((r) => {
@@ -771,46 +925,58 @@ async function showBatchClassificationDialog(
             return {
               ...r,
               action: state?.action || "reject",
-              selectedPaths: state ? Array.from(state.selectedPaths) : [],
+              selectedOptionIDs: state
+                ? Array.from(state.selectedOptionIDs)
+                : [],
             } as BatchItemResult;
           });
           resolve(finalResults);
         },
       })
-      .addButton(getString("dialog.archiveAll") || "全部拒绝并归档", "archiveAll", {
-        callback: () => {
-          const finalResults = results.map((r) => ({
-            ...r,
-            action: "archive" as const,
-            selectedPaths: [],
-          }));
-          resolve(finalResults);
-        },
-      })
+      .addButton(
+        getString("dialog.archiveAll") || "全部拒绝并归档",
+        "archiveAll",
+        {
+          callback: () => {
+            const finalResults = results.map((r) => ({
+              ...r,
+              action: "archive" as const,
+              selectedOptionIDs: [],
+            }));
+            resolve(finalResults);
+          },
+        }
+      )
       .addButton(getString("dialog.rejectAll") || "全部拒绝", "rejectAll", {
         callback: () => {
           const finalResults = results.map((r) => ({
             ...r,
             action: "reject" as const,
-            selectedPaths: [],
+            selectedOptionIDs: [],
           }));
           resolve(finalResults);
         },
       })
-      .addButton(getString("dialog.confirmAllStates") || "确认以上所有状态", "confirmStates", {
-        callback: () => {
-          // Build final results based on current individual states
-          const finalResults = results.map((r) => {
-            const state = itemStates.get(r.item.id);
-            return {
-              ...r,
-              action: state?.action || "reject",
-              selectedPaths: state ? Array.from(state.selectedPaths) : [],
-            } as BatchItemResult;
-          });
-          resolve(finalResults);
-        },
-      })
+      .addButton(
+        getString("dialog.confirmAllStates") || "确认以上所有状态",
+        "confirmStates",
+        {
+          callback: () => {
+            // Build final results based on current individual states
+            const finalResults = results.map((r) => {
+              const state = itemStates.get(r.item.id);
+              return {
+                ...r,
+                action: state?.action || "reject",
+                selectedOptionIDs: state
+                  ? Array.from(state.selectedOptionIDs)
+                  : [],
+              } as BatchItemResult;
+            });
+            resolve(finalResults);
+          },
+        }
+      )
       .setDialogData({ itemStates, resultsMap })
       .open(getString("dialog.batchTitle") || "AI 批量分类确认", {
         fitContent: true,
@@ -837,14 +1003,16 @@ async function showBatchClassificationDialog(
  */
 async function classifyItemsOneByOne(
   regularItems: Zotero.Item[],
-  allCollections: Zotero.Collection[],
-  collectionPaths: string[],
+  collectionOptions: CollectionOption[],
   libraryID: number,
   enableTranslation: boolean
 ): Promise<{ processed: number; totalAdded: number }> {
   const win = Zotero.getMainWindow();
   let totalAdded = 0;
   let processed = 0;
+  const optionByID = new Map(
+    collectionOptions.map((option) => [option.id, option])
+  );
 
   // Show progress window
   const popupWin = new ztoolkit.ProgressWindow(config.addonName, {
@@ -861,7 +1029,8 @@ async function classifyItemsOneByOne(
   for (const currentItem of regularItems) {
     processed++;
     const title = (currentItem.getField("title") as string) || "无标题";
-    const abstract = (currentItem.getField("abstractNote") as string) || "无摘要";
+    const abstract =
+      (currentItem.getField("abstractNote") as string) || "无摘要";
 
     try {
       // Update progress
@@ -870,17 +1039,24 @@ async function classifyItemsOneByOne(
         text: `[${processed}/${regularItems.length}] ${title.slice(0, 30)}...`,
       });
 
-      const aiResult = await callAI(title, abstract, collectionPaths, enableTranslation);
-      const recommendedPaths = aiResult.collections || [];
+      const aiResult = await callAI(
+        title,
+        abstract,
+        collectionOptions,
+        enableTranslation
+      );
       const chineseTitle = aiResult.chineseTitle;
-
-      const validPaths = recommendedPaths.filter((p) =>
-        getCollectionByPath(p, allCollections)
+      const validOptions = resolveAICollectionOptions(
+        aiResult,
+        collectionOptions
       );
 
-      if (validPaths.length === 0) {
+      if (validOptions.length === 0) {
         win.alert(
-          `[${processed}/${regularItems.length}] ${getString("error.noclassification") || "No suitable classification found"}\n\n${title}`
+          `[${processed}/${regularItems.length}] ${
+            getString("error.noclassification") ||
+            "No suitable classification found"
+          }\n\n${title}`
         );
         continue;
       }
@@ -889,12 +1065,14 @@ async function classifyItemsOneByOne(
       const dialogResult = await showClassificationDialog(
         title,
         chineseTitle,
-        validPaths,
-        allCollections
+        validOptions
       );
 
       // Handle user's choice
-      ztoolkit.log("[AI Classifier] Dialog result action:", dialogResult.action);
+      ztoolkit.log(
+        "[AI Classifier] Dialog result action:",
+        dialogResult.action
+      );
       if (dialogResult.action === "cancel") {
         // User clicked window close button - stop entire process
         ztoolkit.log("[AI Classifier] Cancel detected, breaking loop");
@@ -907,7 +1085,10 @@ async function classifyItemsOneByOne(
 
       if (dialogResult.action === "archive") {
         const archiveCollection = await getOrCreateArchiveCollection(libraryID);
-        const added = await safeAddToCollection(archiveCollection, currentItem.id);
+        const added = await safeAddToCollection(
+          archiveCollection,
+          currentItem.id
+        );
         if (added) {
           totalAdded++;
         }
@@ -915,38 +1096,31 @@ async function classifyItemsOneByOne(
       }
 
       // action === "confirm"
-      if (dialogResult.selectedPaths.length === 0) {
+      if (dialogResult.selectedOptionIDs.length === 0) {
         continue;
       }
 
       const addToAllPath = getPref("addToAllPathCollections") as boolean;
 
-      for (const path of dialogResult.selectedPaths) {
-        if (addToAllPath) {
-          const hierarchicalPaths = getHierarchicalPaths(path);
-          for (const partialPath of hierarchicalPaths) {
-            const collection = getCollectionByPath(partialPath, allCollections);
-            if (collection) {
-              const added = await safeAddToCollection(collection, currentItem.id);
-              if (added) {
-                totalAdded++;
-              }
-            }
-          }
-        } else {
-          const collection = getCollectionByPath(path, allCollections);
-          if (collection) {
-            const added = await safeAddToCollection(collection, currentItem.id);
-            if (added) {
-              totalAdded++;
-            }
+      for (const optionID of dialogResult.selectedOptionIDs) {
+        const option = optionByID.get(optionID);
+        if (!option) {
+          continue;
+        }
+
+        for (const collection of getCollectionsToAdd(option, addToAllPath)) {
+          const added = await safeAddToCollection(collection, currentItem.id);
+          if (added) {
+            totalAdded++;
           }
         }
       }
     } catch (e: any) {
       ztoolkit.log("Classification error:", e);
       win.alert(
-        `[${processed}/${regularItems.length}] ${getString("error.processing") || "Processing failed:"} ${e.message}\n\n${title}`
+        `[${processed}/${regularItems.length}] ${
+          getString("error.processing") || "Processing failed:"
+        } ${e.message}\n\n${title}`
       );
     }
   }
@@ -974,12 +1148,14 @@ async function classifyItemsOneByOne(
  */
 async function classifyItemsBatch(
   regularItems: Zotero.Item[],
-  allCollections: Zotero.Collection[],
-  collectionPaths: string[],
+  collectionOptions: CollectionOption[],
   libraryID: number,
   enableTranslation: boolean
 ): Promise<{ processed: number; totalAdded: number }> {
   let totalAdded = 0;
+  const optionByID = new Map(
+    collectionOptions.map((option) => [option.id, option])
+  );
 
   // Show progress window for AI processing
   const popupWin = new ztoolkit.ProgressWindow(config.addonName, {
@@ -999,7 +1175,8 @@ async function classifyItemsBatch(
   for (let i = 0; i < regularItems.length; i++) {
     const currentItem = regularItems[i];
     const title = (currentItem.getField("title") as string) || "无标题";
-    const abstract = (currentItem.getField("abstractNote") as string) || "无摘要";
+    const abstract =
+      (currentItem.getField("abstractNote") as string) || "无摘要";
 
     // Update progress
     popupWin.changeLine({
@@ -1008,29 +1185,33 @@ async function classifyItemsBatch(
     });
 
     try {
-      const aiResult = await callAI(title, abstract, collectionPaths, enableTranslation);
-      const recommendedPaths = aiResult.collections || [];
+      const aiResult = await callAI(
+        title,
+        abstract,
+        collectionOptions,
+        enableTranslation
+      );
       const chineseTitle = aiResult.chineseTitle;
-
-      const validPaths = recommendedPaths.filter((p) =>
-        getCollectionByPath(p, allCollections)
+      const validOptions = resolveAICollectionOptions(
+        aiResult,
+        collectionOptions
       );
 
       batchResults.push({
         item: currentItem,
         title,
         chineseTitle,
-        validPaths,
-        selectedPaths: validPaths,
-        action: validPaths.length > 0 ? "pending" : "reject",
+        validOptions,
+        selectedOptionIDs: validOptions.map((option) => option.id),
+        action: validOptions.length > 0 ? "pending" : "reject",
       });
     } catch (e: any) {
       ztoolkit.log("Classification error:", e);
       batchResults.push({
         item: currentItem,
         title,
-        validPaths: [],
-        selectedPaths: [],
+        validOptions: [],
+        selectedOptionIDs: [],
         action: "reject",
         error: e.message,
       });
@@ -1068,7 +1249,10 @@ async function classifyItemsBatch(
 
     if (result.action === "archive") {
       const archiveCollection = await getOrCreateArchiveCollection(libraryID);
-      const added = await safeAddToCollection(archiveCollection, result.item.id);
+      const added = await safeAddToCollection(
+        archiveCollection,
+        result.item.id
+      );
       if (added) {
         totalAdded++;
       }
@@ -1076,29 +1260,20 @@ async function classifyItemsBatch(
     }
 
     // action === "confirm"
-    if (result.selectedPaths.length === 0) {
+    if (result.selectedOptionIDs.length === 0) {
       continue;
     }
 
-    for (const path of result.selectedPaths) {
-      if (addToAllPath) {
-        const hierarchicalPaths = getHierarchicalPaths(path);
-        for (const partialPath of hierarchicalPaths) {
-          const collection = getCollectionByPath(partialPath, allCollections);
-          if (collection) {
-            const added = await safeAddToCollection(collection, result.item.id);
-            if (added) {
-              totalAdded++;
-            }
-          }
-        }
-      } else {
-        const collection = getCollectionByPath(path, allCollections);
-        if (collection) {
-          const added = await safeAddToCollection(collection, result.item.id);
-          if (added) {
-            totalAdded++;
-          }
+    for (const optionID of result.selectedOptionIDs) {
+      const option = optionByID.get(optionID);
+      if (!option) {
+        continue;
+      }
+
+      for (const collection of getCollectionsToAdd(option, addToAllPath)) {
+        const added = await safeAddToCollection(collection, result.item.id);
+        if (added) {
+          totalAdded++;
         }
       }
     }
@@ -1121,10 +1296,12 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
 
   const libraryID = regularItems[0].libraryID;
   const allCollections = Zotero.Collections.getByLibrary(libraryID);
-  const collectionPaths = buildCollectionTree(allCollections);
+  const collectionOptions = buildCollectionOptions(allCollections);
 
-  if (collectionPaths.length === 0) {
-    win.alert(getString("error.nocollections") || "No collections found in library");
+  if (collectionOptions.length === 0) {
+    win.alert(
+      getString("error.nocollections") || "No collections found in library"
+    );
     return;
   }
 
@@ -1139,16 +1316,14 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
   if (isBatchMode) {
     result = await classifyItemsBatch(
       regularItems,
-      allCollections,
-      collectionPaths,
+      collectionOptions,
       libraryID,
       enableTranslation
     );
   } else {
     result = await classifyItemsOneByOne(
       regularItems,
-      allCollections,
-      collectionPaths,
+      collectionOptions,
       libraryID,
       enableTranslation
     );
@@ -1171,6 +1346,10 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
 
   // Show result summary
   win.alert(
-    `${getString("result.title") || "[AI Classification Complete]"}\n\n${getString("result.processed") || "Items processed:"} ${result.processed}\n${getString("result.added") || "Collections added:"} ${result.totalAdded}${egg}`
+    `${getString("result.title") || "[AI Classification Complete]"}\n\n${
+      getString("result.processed") || "Items processed:"
+    } ${result.processed}\n${
+      getString("result.added") || "Collections added:"
+    } ${result.totalAdded}${egg}`
   );
 }

@@ -1,34 +1,98 @@
 import { getPref } from "../utils/prefs";
 import { DEFAULT_PROMPT } from "../utils/constants";
 
+export interface AICollectionCandidate {
+  id: number;
+  path: string;
+}
+
+interface AIClassificationResult {
+  collectionIDs: number[];
+  collections: string[];
+  chineseTitle?: string;
+}
+
 // Hidden format instruction - not editable by user
-const FORMAT_INSTRUCTION = `规则：只能选择列表中已存在的完整路径，返回 JSON 数组。
+const FORMAT_INSTRUCTION = `规则：可用分类每行格式为 [分类ID] 分类路径。只能选择列表中已存在的分类ID，返回 JSON 数组，数组元素必须是数字ID，不要返回分类路径。
 示例格式：
-- 单个路径: ["分类A/子分类B"]
-- 多个路径: ["分类A/子分类B", "分类C/子分类D", "分类E"]
+- 单个分类: [101]
+- 多个分类: [101, 205, 309]
 - 无合适分类: []`;
 
 // Hidden translation instruction - appended when translation is enabled
 const TRANSLATION_INSTRUCTION = `另外，请将文献标题翻译成中文，在返回的JSON中增加一个"chineseTitle"字段。
 返回格式示例：
-- 单个路径: {"collections": ["分类A"], "chineseTitle": "中文标题"}
-- 多个路径: {"collections": ["分类A/子分类B", "分类C"], "chineseTitle": "中文标题"}
-- 无合适分类: {"collections": [], "chineseTitle": "中文标题"}`;
+- 单个分类: {"collectionIDs": [101], "chineseTitle": "中文标题"}
+- 多个分类: {"collectionIDs": [101, 205], "chineseTitle": "中文标题"}
+- 无合适分类: {"collectionIDs": [], "chineseTitle": "中文标题"}`;
+
+function parseCollectionSelection(value: unknown): {
+  collectionIDs: number[];
+  collections: string[];
+} {
+  const collectionIDs: number[] = [];
+  const collections: string[] = [];
+
+  if (!Array.isArray(value)) {
+    return { collectionIDs, collections };
+  }
+
+  for (const item of value) {
+    if (typeof item === "number" && Number.isFinite(item)) {
+      collectionIDs.push(item);
+      continue;
+    }
+
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (!trimmed) {
+        continue;
+      }
+
+      if (/^\d+$/.test(trimmed)) {
+        collectionIDs.push(Number(trimmed));
+      } else {
+        collections.push(trimmed);
+      }
+    }
+  }
+
+  return {
+    collectionIDs: Array.from(new Set(collectionIDs)),
+    collections: Array.from(new Set(collections)),
+  };
+}
+
+function parseSelectionArrayFromContent(content: string): {
+  collectionIDs: number[];
+  collections: string[];
+} {
+  const arrayMatch = content.match(/\[[\s\S]*?\]/);
+  if (!arrayMatch) {
+    return { collectionIDs: [], collections: [] };
+  }
+
+  try {
+    return parseCollectionSelection(JSON.parse(arrayMatch[0]));
+  } catch {
+    return { collectionIDs: [], collections: [] };
+  }
+}
 
 /**
  * Call AI API for classification
  * @param title - Article title
  * @param abstract - Article abstract
- * @param collectionPaths - Available collection paths
+ * @param collectionCandidates - Available collection IDs and display paths
  * @param includeTranslation - Whether to include Chinese title translation
  * @returns Object with recommended collection paths and optional Chinese title
  */
 export async function callAI(
   title: string,
   abstract: string,
-  collectionPaths: string[],
+  collectionCandidates: AICollectionCandidate[],
   includeTranslation: boolean = false
-): Promise<{ collections: string[]; chineseTitle?: string }> {
+): Promise<AIClassificationResult> {
   const apiUrl = getPref("apiUrl") as string;
   const model = getPref("model") as string;
   const apiKey = getPref("apiKey") as string;
@@ -38,8 +102,8 @@ export async function callAI(
     throw new Error("API URL and API Key must be configured in preferences");
   }
 
-  const collectionListStr = collectionPaths
-    .map((p, i) => `${i + 1}. ${p}`)
+  const collectionListStr = collectionCandidates
+    .map((candidate, i) => `${i + 1}. [${candidate.id}] ${candidate.path}`)
     .join("\n");
 
   // Build system prompt with user-editable part and hidden format instruction
@@ -55,7 +119,9 @@ export async function callAI(
 可用分类:
 ${collectionListStr}
 
-返回 JSON${includeTranslation ? " (包含collections数组和chineseTitle字段)" : " 数组"}:`;
+返回 JSON${
+    includeTranslation ? " (包含collectionIDs数组和chineseTitle字段)" : " 数组"
+  }:`;
 
   // Log the full prompt to Error Console for debugging
   // Zotero.log("[AI-Collection] ========== 发送给LLM的完整Prompt ==========");
@@ -98,25 +164,21 @@ ${collectionListStr}
     if (jsonMatch) {
       try {
         const parsed = JSON.parse(jsonMatch[0]);
+        const selection = parseCollectionSelection(
+          parsed.collectionIDs || parsed.ids || parsed.collections || []
+        );
         return {
-          collections: parsed.collections || [],
+          ...selection,
           chineseTitle: parsed.chineseTitle || undefined,
         };
       } catch {
-        // Fallback: try to extract array
-        const arrayMatch = content.match(/\[[\s\S]*\]/);
-        return {
-          collections: arrayMatch ? JSON.parse(arrayMatch[0]) : [],
-        };
+        return parseSelectionArrayFromContent(content);
       }
     }
-    return { collections: [] };
+    return parseSelectionArrayFromContent(content);
   } else {
     // Parse simple array
-    const match = content.match(/\[[\s\S]*\]/);
-    return {
-      collections: match ? JSON.parse(match[0]) : [],
-    };
+    return parseSelectionArrayFromContent(content);
   }
 }
 
@@ -124,10 +186,18 @@ ${collectionListStr}
  * Test API connection
  * @returns Object with success status and message
  */
-export async function testConnection(): Promise<{ success: boolean; message?: string }> {
+export async function testConnection(): Promise<{
+  success: boolean;
+  message?: string;
+}> {
   try {
-    const result = await callAI("Test Title", "Test Abstract", ["Test/Category"]);
-    if (Array.isArray(result.collections)) {
+    const result = await callAI("Test Title", "Test Abstract", [
+      { id: 1, path: "Test/Category" },
+    ]);
+    if (
+      Array.isArray(result.collectionIDs) &&
+      Array.isArray(result.collections)
+    ) {
       return { success: true, message: "API response received successfully" };
     }
     return { success: false, message: "Unexpected response format" };
