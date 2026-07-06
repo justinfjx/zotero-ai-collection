@@ -3,7 +3,7 @@
     "zotero-ai-collection@jiaxin.fan": {
       "updates": [
         {
-          "version": "0.0.2",
+          "version": "0.0.3",
           "update_link": "https://github.com/justinfjx/zotero-ai-collection/releases/latest/download/zotero-ai-collection.xpi",
           "applications": {
             "gecko": {
@@ -12,7 +12,7 @@
           }
         },
         {
-          "version": "0.0.2",
+          "version": "0.0.3",
           "update_link": "https://github.com/justinfjx/zotero-ai-collection/releases/latest/download/zotero-ai-collection.xpi",
           "applications": {
             "zotero": {
