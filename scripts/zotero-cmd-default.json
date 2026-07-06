@@ -4,6 +4,7 @@
   "killZoteroUnix": "kill -9 $(ps -x | grep zotero)",
   "exec": {
     "6": "/path/to/zotero6.exe",
-    "7": "/path/to/zotero7.exe"
+    "7": "/path/to/zotero7.exe",
+    "9": "/path/to/zotero9.exe"
   }
 }

@@ -1,5 +1,5 @@
 /**
- * Bootstrap entry point for Zotero 7/8 plugin
+ * Bootstrap entry point for Zotero 7/8/9 plugin
  * Based on Zotero team's official Make It Red example
  * https://github.com/zotero/make-it-red
  * https://www.zotero.org/support/dev/zotero_7_for_developers
@@ -11,10 +11,10 @@ if (typeof Zotero == "undefined") {
 
 var chromeHandle;
 
-// Import Services module - compatible with both Zotero 7 and Zotero 8
+// Import Services module - compatible with Zotero 7, 8, and 9
 var Services;
 try {
-  // Zotero 8 (Firefox 128+) uses importESModule
+  // Zotero 8+ (Firefox 128+) uses importESModule
   Services = ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs").default;
 } catch (e) {
   // Fallback for Zotero 7
@@ -127,7 +127,7 @@ function shutdown({ id, version, resourceURI, rootURI }, reason) {
     .getService(Components.interfaces.nsIStringBundleService)
     .flushBundles();
 
-  // Cu.unload is removed in Zotero 8, and not needed for loadSubScript
+  // Cu.unload is removed in Zotero 8+, and not needed for loadSubScript
   // Scripts loaded via loadSubScript are automatically cleaned up
 
   if (chromeHandle) {

@@ -19,6 +19,7 @@
     "tsc": "tsc --noEmit",
     "start-z6": "node scripts/start.mjs --z 6",
     "start-z7": "node scripts/start.mjs --z 7",
+    "start-z9": "node scripts/start.mjs --z 9",
     "start": "node scripts/start.mjs",
     "stop": "node scripts/stop.mjs",
     "restart-dev": "npm run build-dev && npm run stop && npm run start",
