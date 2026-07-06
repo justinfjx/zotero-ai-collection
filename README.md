@@ -239,4 +239,6 @@ Thanks to these great projects (in no particular order):
 - [MuiseDestiny/zotero-gpt](https://github.com/MuiseDestiny/zotero-gpt)
 - [guaguastandup/zotero-pdf2zh](https://github.com/guaguastandup/zotero-pdf2zh)
 
+Thanks to the [Linux.do](https://linux.do) for the references.
+
 Also thanks to everyone who helped test this project and provided feature suggestions.

@@ -239,4 +239,6 @@ AGPL-3.0-or-later. See `LICENSE`.
 - [MuiseDestiny/zotero-gpt](https://github.com/MuiseDestiny/zotero-gpt)
 - [guaguastandup/zotero-pdf2zh](https://github.com/guaguastandup/zotero-pdf2zh)
 
+感谢 [Linux.do](https://linux.do) 的相关参考。
+
 也感谢为本项目进行测试、提出功能建议的同志们。
