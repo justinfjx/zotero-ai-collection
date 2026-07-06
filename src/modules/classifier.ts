@@ -266,6 +266,112 @@ function getCollectionsToAdd(
     : [option.collection];
 }
 
+interface RGBAColor {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+function clampColorChannel(value: number): number {
+  return Math.max(0, Math.min(255, value));
+}
+
+function parseCssColor(color: string): RGBAColor | null {
+  const match = color.match(/^rgba?\((.+)\)$/i);
+  if (!match) return null;
+
+  const parts = match[1]
+    .replace(/\s*\/\s*/, " ")
+    .split(/[,\s]+/)
+    .filter(Boolean);
+  if (parts.length < 3) return null;
+
+  const channels = parts.slice(0, 3).map((part) => {
+    const value = Number.parseFloat(part);
+    if (!Number.isFinite(value)) return NaN;
+    return part.endsWith("%") ? (value / 100) * 255 : value;
+  });
+  if (channels.some((value) => !Number.isFinite(value))) return null;
+
+  const alpha = parts[3] ? Number.parseFloat(parts[3]) : 1;
+
+  return {
+    r: clampColorChannel(channels[0]),
+    g: clampColorChannel(channels[1]),
+    b: clampColorChannel(channels[2]),
+    a: Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 1,
+  };
+}
+
+function getVisibleBackgroundColor(
+  win: Window,
+  elements: Array<Element | null>
+): RGBAColor | null {
+  for (const element of elements) {
+    if (!element) continue;
+
+    const color = parseCssColor(win.getComputedStyle(element).backgroundColor);
+    if (color && color.a > 0.5) {
+      return color;
+    }
+  }
+
+  return null;
+}
+
+function getDialogBackgroundColor(doc: Document): RGBAColor | null {
+  const win = doc.defaultView;
+  if (!win) return null;
+
+  return getVisibleBackgroundColor(win, [doc.body, doc.documentElement]);
+}
+
+function getZoteroWindowBackgroundColor(): RGBAColor | null {
+  try {
+    const win = Zotero.getMainWindow();
+    const doc = win?.document;
+    if (!doc) return null;
+
+    return getVisibleBackgroundColor(win, [
+      doc.querySelector("#zotero-pane"),
+      doc.querySelector("#zotero-items-tree"),
+      doc.body,
+      doc.documentElement,
+    ]);
+  } catch {
+    return null;
+  }
+}
+
+function isDarkColor(color: RGBAColor): boolean {
+  const luminance =
+    (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255;
+  return luminance < 0.5;
+}
+
+function applyReadableDialogTextColor(doc: Document): void {
+  const backgroundColor =
+    getDialogBackgroundColor(doc) || getZoteroWindowBackgroundColor();
+  const prefersDark =
+    doc.defaultView?.matchMedia?.("(prefers-color-scheme: dark)").matches ??
+    false;
+  const useDarkTextScheme = backgroundColor
+    ? isDarkColor(backgroundColor)
+    : prefersDark;
+  const colorScheme = useDarkTextScheme ? "dark" : "light";
+  const textColor = useDarkTextScheme ? "#ffffff" : "CanvasText";
+
+  doc.documentElement.style.setProperty("color-scheme", colorScheme);
+  doc.documentElement.style.color = textColor;
+
+  if (doc.body) {
+    doc.body.style.setProperty("color-scheme", colorScheme);
+    doc.body.style.backgroundColor = "Canvas";
+    doc.body.style.color = textColor;
+  }
+}
+
 /**
  * Safely add item to collection
  * @param collection - Target collection
@@ -349,7 +455,7 @@ async function showClassificationDialog(
 
     const selectedOptionIDs = new Set(validOptions.map((option) => option.id));
 
-    // Build rows for the dialog (no color styles for dark mode compatibility)
+    // Build rows for the dialog
     const rows: Array<{
       tag: string;
       namespace?: string;
@@ -508,6 +614,10 @@ async function showClassificationDialog(
       // Handle window close button (X) - resolve as cancel to stop entire process
       .setDialogData({
         loadCallback: () => {
+          if (dialogHelper.window?.document) {
+            applyReadableDialogTextColor(dialogHelper.window.document);
+          }
+
           // Add unload event listener after window is loaded
           if (dialogHelper.window) {
             dialogHelper.window.addEventListener("unload", () => {
@@ -977,7 +1087,15 @@ async function showBatchClassificationDialog(
           },
         }
       )
-      .setDialogData({ itemStates, resultsMap })
+      .setDialogData({
+        itemStates,
+        resultsMap,
+        loadCallback: () => {
+          if (dialogHelper.window?.document) {
+            applyReadableDialogTextColor(dialogHelper.window.document);
+          }
+        },
+      })
       .open(getString("dialog.batchTitle") || "AI 批量分类确认", {
         fitContent: true,
         centerscreen: true,
