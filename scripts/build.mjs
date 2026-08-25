@@ -41,7 +41,7 @@ function copyFolderRecursiveSync(source, target) {
 
   // Copy
   if (lstatSync(source).isDirectory()) {
-    files = readdirSync(source);
+    files = readdirSync(source).filter((file) => file !== ".DS_Store");
     files.forEach(function (file) {
       var curSource = join(source, file);
       if (lstatSync(curSource).isDirectory()) {

@@ -5,6 +5,7 @@
   "exec": {
     "6": "/path/to/zotero6.exe",
     "7": "/path/to/zotero7.exe",
-    "9": "/path/to/zotero9.exe"
+    "9": "/path/to/zotero9.exe",
+    "10": "/path/to/zotero10.exe"
   }
 }

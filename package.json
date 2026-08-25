@@ -1,6 +1,6 @@
 {
   "name": "zotero-ai-collection",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "AI-powered literature classification for Zotero",
   "config": {
     "addonName": "Collection for Zotero",
@@ -20,6 +20,7 @@
     "start-z6": "node scripts/start.mjs --z 6",
     "start-z7": "node scripts/start.mjs --z 7",
     "start-z9": "node scripts/start.mjs --z 9",
+    "start-z10": "node scripts/start.mjs --z 10",
     "start": "node scripts/start.mjs",
     "stop": "node scripts/stop.mjs",
     "restart-dev": "npm run build-dev && npm run stop && npm run start",

@@ -1,5 +1,5 @@
 /**
- * Bootstrap entry point for Zotero 7/8/9 plugin
+ * Bootstrap entry point for Zotero 7/8/9/10 plugin
  * Based on Zotero team's official Make It Red example
  * https://github.com/zotero/make-it-red
  * https://www.zotero.org/support/dev/zotero_7_for_developers
@@ -11,7 +11,7 @@ if (typeof Zotero == "undefined") {
 
 var chromeHandle;
 
-// Import Services module - compatible with Zotero 7, 8, and 9
+// Import Services module - compatible with Zotero 7, 8, 9, and 10
 var Services;
 try {
   // Zotero 8+ (Firefox 128+) uses importESModule
