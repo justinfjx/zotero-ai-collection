@@ -1,6 +1,6 @@
 {
   "name": "zotero-ai-collection",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "AI-powered literature classification for Zotero",
   "config": {
     "addonName": "Collection for Zotero",
