@@ -11,7 +11,11 @@ export interface Captured {
  * Local stand-in for an LLM API. Answers every request with `answer` in the
  * shape the called endpoint expects. No network, no cost.
  */
-export async function startFakeLLM(answer: unknown, status = 200) {
+export async function startFakeLLM(
+  answer: unknown,
+  status = 200,
+  options: { rejectResponseFormat?: boolean; text?: string } = {}
+) {
   const requests: Captured[] = [];
   const server = http.createServer((req, res) => {
     let raw = "";
@@ -20,6 +24,13 @@ export async function startFakeLLM(answer: unknown, status = 200) {
       const body = raw ? JSON.parse(raw) : {};
       requests.push({ path: req.url ?? "", headers: req.headers, body });
       res.setHeader("content-type", "application/json");
+      if (options.rejectResponseFormat && body.response_format) {
+        res.statusCode = 400;
+        res.end(
+          JSON.stringify({ error: { message: "Unsupported response_format" } })
+        );
+        return;
+      }
       if (status !== 200) {
         res.statusCode = status;
         res.end(JSON.stringify({ error: { message: "boom", type: "x" } }));
@@ -58,7 +69,10 @@ export async function startFakeLLM(answer: unknown, status = 200) {
             choices: [
               {
                 index: 0,
-                message: { role: "assistant", content: JSON.stringify(answer) },
+                message: {
+                  role: "assistant",
+                  content: options.text ?? JSON.stringify(answer),
+                },
                 finish_reason: "stop",
               },
             ],

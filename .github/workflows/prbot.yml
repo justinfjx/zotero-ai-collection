@@ -26,3 +26,12 @@ jobs:
 
       - name: Run lint
         run: npx eslint . --ext .ts
+
+      - name: Type check
+        run: npm run tsc
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build-prod

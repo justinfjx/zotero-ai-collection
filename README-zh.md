@@ -116,9 +116,10 @@
 
 - `Configuration` 下拉框：选择当前启用的 API 配置方案
 - `保存/重命名/删除`：管理多套 API 配置，便于在不同服务商之间切换
-- `API Full URL`：完整的 Chat Completions 地址（默认 `https://api.openai.com/v1/chat/completions`）
+- `服务商`：`OpenAI-compatible`（默认）或 `Anthropic`
+- `API Full URL`：OpenAI 兼容服务可填完整 Chat Completions 地址（默认 `https://api.openai.com/v1/chat/completions`）或 API 根地址；Anthropic 填 `https://api.anthropic.com/v1`
 - `Model Name`：模型名（默认 `gpt-3.5-turbo`，可改为任意服务端支持的模型名）
-- `API Key`：以 `Authorization: Bearer {API Key}` 方式放在请求头里
+- `API Key`：以 `Authorization: Bearer {API Key}` 方式放在请求头里，Anthropic 使用 `x-api-key`
 - `测试连接`：用一条测试请求检查端点可用性与返回格式
 
 ### 2) 分类 Prompt
@@ -156,7 +157,7 @@
 - **允许 AI 建议新建分类**（默认关闭）：当没有现有分类适合某个条目时，AI 可建议在某个现有分类下新建分类。这些条目保持未归类并被记录
 - **所需条目数**（默认 10）：当这么多条目共享同一个建议时，会询问你**创建并移入条目**、**暂不**（有更多条目加入后再询问）或**不再建议**
 - **允许新建顶级分类**：默认关闭；关闭时建议必须位于某个现有分类之下
-- 最大层级同样适用于建议的新分类
+- 建议遵循已勾选的分类范围和最大层级。待处理建议按文库分别保存；达到阈值和确认归类时，只计算仍存在且未归类的条目
 
 ### 8) 翻译设置
 
@@ -177,7 +178,9 @@ API 根地址即去掉末尾 `/chat/completions` 或 `/messages` 的 `API Full U
 
 ### 输出格式
 
-插件要求模型返回结构化的 JSON 对象，并在使用前校验：
+OpenAI 兼容服务通过 Prompt 接收 JSON Schema，插件在本地校验返回值，使原有普通 Chat Completions 配置可继续使用。Anthropic 使用 SDK 的结构化输出功能。每次请求限时 60 秒。
+
+模型返回 JSON 对象：
 
 ```json
 { "collectionIDs": [101, 205] }
@@ -217,9 +220,11 @@ API 根地址即去掉末尾 `/chat/completions` 或 `/messages` 的 `API Full U
 
 ## 🛠️ 开发与构建
 
+需要 Node.js 22 或更高版本。
+
 ```bash
 cd zotero-ai-collection
-npm install
+npm ci
 npm run build
 npm test
 ```

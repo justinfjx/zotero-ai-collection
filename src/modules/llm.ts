@@ -1,4 +1,10 @@
-import { generateText, Output, type FlexibleSchema } from "ai";
+import {
+  extractJsonMiddleware,
+  generateText,
+  Output,
+  wrapLanguageModel,
+  type FlexibleSchema,
+} from "ai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 
@@ -26,13 +32,40 @@ export function createModel(config: LLMConfig) {
   if (config.provider === "anthropic") {
     return createAnthropic({ baseURL, apiKey, fetch })(model);
   }
-  return createOpenAICompatible({
-    name: "openai-compatible",
-    baseURL,
-    apiKey,
-    supportsStructuredOutputs: true,
-    fetch,
-  })(model);
+  return wrapLanguageModel({
+    model: createOpenAICompatible({
+      name: "openai-compatible",
+      baseURL,
+      apiKey,
+      fetch,
+    })(model),
+    middleware: [
+      {
+        specificationVersion: "v4",
+        transformParams: async ({ params }) => {
+          if (params.responseFormat?.type !== "json") {
+            return params;
+          }
+          // Saved profiles also target servers with prompt-based JSON support.
+          // Keep that request contract; Output.object still validates the answer.
+          return {
+            ...params,
+            responseFormat: { type: "text" },
+            prompt: [
+              {
+                role: "system",
+                content: `Return only a JSON object matching this schema:\n${JSON.stringify(
+                  params.responseFormat.schema
+                )}`,
+              },
+              ...params.prompt,
+            ],
+          };
+        },
+      },
+      extractJsonMiddleware(),
+    ],
+  });
 }
 
 /**
@@ -57,6 +90,7 @@ export async function generateJSON<T>(
     temperature: 0,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
     maxRetries: 0,
+    timeout: 60000,
   });
   return output;
 }

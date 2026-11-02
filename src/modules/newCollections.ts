@@ -1,10 +1,8 @@
 import { getString } from "../utils/locale";
 import { getPref, setPref } from "../utils/prefs";
 import type { AIClassificationResult, ProposalOptions } from "./api";
-import {
-  createMissingCollections,
-  getCollectionsByPath,
-} from "./collectionWriter";
+import { buildCollectionNodes, flattenNodes } from "./collectionTree";
+import { getEnabledCollections, isCollectionEnabled } from "./collectionScope";
 import {
   addToStore,
   checkProposal,
@@ -12,13 +10,11 @@ import {
   dismiss,
   markPrompted,
   openPaths,
-  parseStore,
+  parseLibraryStores,
   readyProposals,
-  removeItems,
   removeProposal,
   type CollectionRef,
   type NewCollectionProposal,
-  type PendingProposal,
   type ProposalLimits,
   type ProposalStore,
 } from "./proposals";
@@ -26,8 +22,11 @@ import {
 const DEFAULT_MIN_ITEMS = 10;
 const TITLES_SHOWN = 5;
 
-// Suggestions made during the current run, by item ID
-const suggestions = new Map<number, NewCollectionProposal>();
+/** Suggestions belong to one classification run. */
+export type SuggestionMap = Map<number, NewCollectionProposal>;
+
+// Serialize reviews across runs so prompts and preference updates have one owner.
+let reviewQueue: Promise<void> = Promise.resolve();
 
 function isEnabled(): boolean {
   return getPref("proposeNewCollections") === true;
@@ -40,19 +39,89 @@ function readLimits(): ProposalLimits {
   };
 }
 
-function readStore(): ProposalStore {
-  return parseStore(getPref("pendingProposals") as string | undefined);
+function readStores() {
+  return parseLibraryStores(
+    getPref("pendingProposals") as string | undefined,
+    Zotero.Libraries.userLibraryID
+  );
 }
 
-function writeStore(store: ProposalStore): void {
-  setPref("pendingProposals", JSON.stringify(store));
+function readStore(libraryID: number): ProposalStore {
+  return readStores()[libraryID] ?? {};
+}
+
+function writeStore(libraryID: number, store: ProposalStore): void {
+  const libraries = readStores();
+  if (Object.keys(store).length > 0) {
+    libraries[libraryID] = store;
+  } else {
+    delete libraries[libraryID];
+  }
+  setPref(
+    "pendingProposals",
+    Object.keys(libraries).length
+      ? JSON.stringify({ version: 1, libraries })
+      : "{}"
+  );
 }
 
 function listCollections(libraryID: number): CollectionRef[] {
-  return Array.from(getCollectionsByPath(libraryID), ([path, collection]) => ({
-    id: collection.id,
-    path,
-  }));
+  return flattenNodes(
+    buildCollectionNodes(Zotero.Collections.getByLibrary(libraryID))
+  ).map(({ option }) => ({ id: option.id, path: option.path }));
+}
+
+function checkSuggestion(
+  suggestion: NewCollectionProposal,
+  collections: CollectionRef[],
+  limits: ProposalLimits
+) {
+  const parent = collections.find(({ id }) => id === suggestion.parentID);
+  if (parent && !isCollectionEnabled(parent)) {
+    return {
+      ok: false,
+      reason: "parent excluded by collection selection",
+    } as const;
+  }
+  return checkProposal(suggestion, collections, limits);
+}
+
+async function getEligibleItem(libraryID: number, key: string) {
+  const item = (await Zotero.Items.getByLibraryAndKeyAsync(libraryID, key)) as
+    | Zotero.Item
+    | false;
+  return item &&
+    item.libraryID === libraryID &&
+    item.isRegularItem() &&
+    !item.deleted &&
+    item.getCollections().length === 0
+    ? item
+    : undefined;
+}
+
+/** Refresh every pending item, including items outside the current batch. */
+async function pruneStore(
+  libraryID: number,
+  store: ProposalStore
+): Promise<ProposalStore> {
+  const entries = await Promise.all(
+    Object.entries(store).map(async ([path, proposal]) => {
+      const items: Record<string, string> = {};
+      for (const key of Object.keys(proposal.items)) {
+        const item = await getEligibleItem(libraryID, key);
+        if (item) {
+          items[key] = item.getField("title") as string;
+        }
+      }
+      return [path, { ...proposal, items }] as const;
+    })
+  );
+  return Object.fromEntries(
+    entries.filter(
+      ([, proposal]) =>
+        proposal.dismissed || Object.keys(proposal.items).length > 0
+    )
+  );
 }
 
 /**
@@ -67,12 +136,23 @@ export function getProposalOptions(
     return undefined;
   }
   const limits = readLimits();
+  const collections = listCollections(libraryID);
+  const enabled = getEnabledCollections();
+  const parents = collections.filter(
+    (collection) =>
+      isCollectionEnabled(collection, enabled) &&
+      (limits.maxDepth === 0 || depthOf(collection.path) < limits.maxDepth)
+  );
+  if (!limits.allowTopLevel && parents.length === 0) {
+    return undefined;
+  }
+  const store = readStore(libraryID);
   return {
-    parents: listCollections(libraryID).filter(
-      ({ path }) => limits.maxDepth === 0 || depthOf(path) < limits.maxDepth
-    ),
+    parents,
     ...limits,
-    openPaths: openPaths(readStore()),
+    openPaths: openPaths(store).filter(
+      (path) => checkSuggestion(store[path], collections, limits).ok
+    ),
   };
 }
 
@@ -83,9 +163,16 @@ export function getProposalOptions(
  */
 export function recordSuggestion(
   item: Zotero.Item,
-  result: AIClassificationResult
+  result: AIClassificationResult,
+  suggestions: SuggestionMap
 ): void {
-  if (isEnabled() && result.newCollection) {
+  suggestions.delete(item.id);
+  if (
+    isEnabled() &&
+    result.newCollection &&
+    result.collectionIDs.length === 0 &&
+    result.collections.length === 0
+  ) {
     suggestions.set(item.id, result.newCollection);
   }
 }
@@ -96,27 +183,39 @@ export function recordSuggestion(
  * @param libraryID - The library ID
  * @param items - The items that were just classified
  */
-export async function reviewSuggestions(
+export function reviewSuggestions(
   libraryID: number,
-  items: Zotero.Item[]
+  items: Zotero.Item[],
+  suggestions: SuggestionMap
+): Promise<void> {
+  const review = reviewQueue.then(() =>
+    reviewRun(libraryID, items, suggestions)
+  );
+  reviewQueue = review.catch(() => undefined);
+  return review;
+}
+
+async function reviewRun(
+  libraryID: number,
+  items: Zotero.Item[],
+  suggestions: SuggestionMap
 ): Promise<void> {
   if (!isEnabled()) {
     return;
   }
   const collections = listCollections(libraryID);
   const limits = readLimits();
-  const isFiled = (item: Zotero.Item) => item.getCollections().length > 0;
-
-  let store = removeItems(
-    readStore(),
-    items.filter(isFiled).map((item) => item.key)
-  );
+  let store = await pruneStore(libraryID, readStore(libraryID));
   for (const item of items) {
     const suggestion = suggestions.get(item.id);
-    if (!suggestion || isFiled(item)) {
+    if (
+      !suggestion ||
+      item.libraryID !== libraryID ||
+      !(await getEligibleItem(libraryID, item.key))
+    ) {
       continue;
     }
-    const check = checkProposal(suggestion, collections, limits);
+    const check = checkSuggestion(suggestion, collections, limits);
     if (check.ok) {
       store = addToStore(
         store,
@@ -128,11 +227,13 @@ export async function reviewSuggestions(
     }
   }
   suggestions.clear();
-  writeStore(store);
+  writeStore(libraryID, store);
 
   const minItems = Number(getPref("proposalMinItems")) || DEFAULT_MIN_ITEMS;
   for (const path of readyProposals(store, minItems)) {
-    await askAboutProposal(libraryID, path);
+    if (checkSuggestion(store[path], collections, limits).ok) {
+      await askAboutProposal(libraryID, path);
+    }
   }
 }
 
@@ -145,7 +246,7 @@ async function askAboutProposal(
   libraryID: number,
   path: string
 ): Promise<void> {
-  const proposal = readStore()[path];
+  const proposal = readStore(libraryID)[path];
   const titles = Object.values(proposal.items);
   const message = [
     path,
@@ -172,11 +273,18 @@ async function askAboutProposal(
   );
 
   if (choice === 0) {
-    await createAndFile(libraryID, path, proposal);
+    try {
+      await createAndFile(libraryID, path);
+    } catch (error: any) {
+      Zotero.getMainWindow().alert(
+        `${getString("error.processing")} ${error.message}`
+      );
+      throw error;
+    }
   } else if (choice === 1) {
-    writeStore(markPrompted(readStore(), path));
+    writeStore(libraryID, markPrompted(readStore(libraryID), path));
   } else {
-    writeStore(dismiss(readStore(), path));
+    writeStore(libraryID, dismiss(readStore(libraryID), path));
   }
 }
 
@@ -184,40 +292,45 @@ async function askAboutProposal(
  * Create a suggested collection and move its items into it
  * @param libraryID - The library ID
  * @param path - The path of the suggested collection
- * @param proposal - The suggestion with its items
  */
-async function createAndFile(
-  libraryID: number,
-  path: string,
-  proposal: PendingProposal
-): Promise<void> {
-  const check = checkProposal(
+async function createAndFile(libraryID: number, path: string): Promise<void> {
+  const store = await pruneStore(libraryID, readStore(libraryID));
+  writeStore(libraryID, store);
+  const proposal = store[path];
+  const minItems = Number(getPref("proposalMinItems")) || DEFAULT_MIN_ITEMS;
+  if (!proposal || Object.keys(proposal.items).length < minItems) {
+    return;
+  }
+  const check = checkSuggestion(
     { parentID: proposal.parentID, name: proposal.name },
     listCollections(libraryID),
     readLimits()
   );
   if (!check.ok) {
     Zotero.getMainWindow().alert(`${path}: ${check.reason}`);
-    writeStore(removeProposal(readStore(), path));
     return;
   }
 
-  await createMissingCollections(libraryID, [path]);
-  const collection = getCollectionsByPath(libraryID).get(path)!;
   let moved = 0;
-  for (const key of Object.keys(proposal.items)) {
-    const item = Zotero.Items.getByLibraryAndKey(libraryID, key) as
-      | Zotero.Item
-      | false;
-    if (item && !item.deleted) {
-      item.addToCollection(collection.id);
-      await item.saveTx();
-      moved++;
+  await Zotero.DB.executeTransaction(async () => {
+    const collection = new Zotero.Collection({
+      libraryID,
+      parentID: check.parentID ?? undefined,
+      name: proposal.name.trim(),
+    });
+    await collection.save();
+    for (const key of Object.keys(proposal.items)) {
+      const item = await getEligibleItem(libraryID, key);
+      if (item) {
+        item.addToCollection(collection.id);
+        await item.save();
+        moved++;
+      }
     }
-  }
-  writeStore(removeProposal(readStore(), path));
+  });
+  writeStore(libraryID, removeProposal(readStore(libraryID), path));
   Zotero.getMainWindow().alert(
-    `${getString("proposal.created")} ${path}\n${getString(
+    `${getString("proposal.created")} ${check.path}\n${getString(
       "proposal.moved"
     )} ${moved}`
   );

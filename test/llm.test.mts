@@ -99,3 +99,43 @@ test("toBaseURL strips known endpoint suffixes and trailing slashes", () => {
   );
   assert.equal(toBaseURL("https://example.com/api"), "https://example.com/api");
 });
+
+test("OpenAI-compatible JSON generation also works on plain Chat Completions servers", async () => {
+  const fake = await startFakeLLM(answer, 200, { rejectResponseFormat: true });
+  try {
+    const result = await generateJSON(
+      configFor("openai-compatible", fake.baseURL),
+      "system",
+      "prompt",
+      schema
+    );
+    assert.deepEqual(result, answer);
+    assert.equal(fake.requests.length, 1);
+    assert.equal(fake.requests[0].body.response_format, undefined);
+    assert.match(
+      JSON.stringify(fake.requests[0].body.messages),
+      /collectionIDs/
+    );
+  } finally {
+    await fake.close();
+  }
+});
+
+test("validates JSON returned inside a Markdown fence", async () => {
+  const fake = await startFakeLLM(answer, 200, {
+    text: "```json\n" + JSON.stringify(answer) + "\n```",
+  });
+  try {
+    assert.deepEqual(
+      await generateJSON(
+        configFor("openai-compatible", fake.baseURL),
+        "system",
+        "prompt",
+        schema
+      ),
+      answer
+    );
+  } finally {
+    await fake.close();
+  }
+});

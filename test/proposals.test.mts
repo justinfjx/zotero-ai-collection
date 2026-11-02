@@ -7,6 +7,7 @@ import {
   markPrompted,
   openPaths,
   parseStore,
+  parseLibraryStores,
   readyProposals,
   removeItems,
   removeProposal,
@@ -156,4 +157,48 @@ test("parseStore tolerates missing and invalid text", () => {
   assert.deepEqual(parseStore("[1]"), {});
   const store = storeWith(1);
   assert.deepEqual(parseStore(JSON.stringify(store)), store);
+});
+
+test("a dismissed topic stays dismissed after all of its items are removed", () => {
+  const empty = removeItems(dismiss(storeWith(1), "Algorithms/Walks"), ["K0"]);
+  const grown = addToStore(
+    empty,
+    "Algorithms/Walks",
+    proposal,
+    "NEW",
+    "New paper"
+  );
+  assert.deepEqual(readyProposals(grown, 1), []);
+  assert.equal(grown["Algorithms/Walks"].dismissed, true);
+});
+
+test("reads separate library stores and keeps the unscoped format in My Library", () => {
+  const store = storeWith(1);
+  assert.deepEqual(parseLibraryStores(JSON.stringify(store), 1), { 1: store });
+  const libraries = { 1: store, 2: storeWith(2) };
+  assert.deepEqual(
+    parseLibraryStores(JSON.stringify({ version: 1, libraries }), 1),
+    libraries
+  );
+  assert.deepEqual(parseLibraryStores("not json", 1), {});
+});
+
+test("malformed stored entries are ignored individually", () => {
+  const store = storeWith(1);
+  assert.deepEqual(
+    parseStore(JSON.stringify({ ...store, broken: { items: null } })),
+    store
+  );
+});
+
+test("collection names that match object property names are stored normally", () => {
+  const store = addToStore(
+    {},
+    "constructor",
+    { parentID: null, name: "constructor" },
+    "K1",
+    "Paper"
+  );
+  assert.equal(store.constructor.name, "constructor");
+  assert.deepEqual(Object.keys(store.constructor.items), ["K1"]);
 });

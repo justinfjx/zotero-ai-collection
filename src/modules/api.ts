@@ -60,7 +60,7 @@ function buildProposalInstruction(options: ProposalOptions): string {
     options.maxDepth > 0
       ? ` The new collection must not be deeper than level ${options.maxDepth}.`
       : "";
-  return `If no existing collection fits, you may suggest one new collection in the newCollection field: parentID is the ID of its parent (choose only from the "Possible parents" list${top}) and name is the new collection's name (short, without "/"). Suggest one only when nothing fits; otherwise omit newCollection.${depth}`;
+  return `For unmatched papers, this rule takes precedence over instructions to use existing collections only: you may suggest one new collection in the newCollection field. parentID is the ID of its parent (choose only from the "Possible parents" list${top}) and name is the new collection's name (short, without "/"). Suggest one only when nothing fits; otherwise omit newCollection.${depth}`;
 }
 
 /**

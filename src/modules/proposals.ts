@@ -38,6 +38,8 @@ export interface PendingProposal {
 /** Pending proposals by the path the collection would have */
 export type ProposalStore = Record<string, PendingProposal>;
 
+export type LibraryProposalStores = Record<string, ProposalStore>;
+
 function normalize(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -109,9 +111,54 @@ export function checkProposal(
 export function parseStore(text: string | undefined): ProposalStore {
   try {
     const value = JSON.parse(text || "{}");
-    return value && typeof value === "object" && !Array.isArray(value)
-      ? value
-      : {};
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(value).filter(
+        ([, entry]: [string, any]) =>
+          entry &&
+          (entry.parentID === null || Number.isInteger(entry.parentID)) &&
+          typeof entry.name === "string" &&
+          entry.items &&
+          typeof entry.items === "object" &&
+          !Array.isArray(entry.items) &&
+          Object.values(entry.items).every(
+            (title) => typeof title === "string"
+          ) &&
+          Number.isInteger(entry.prompted) &&
+          entry.prompted >= 0 &&
+          typeof entry.dismissed === "boolean"
+      )
+    ) as ProposalStore;
+  } catch {
+    return {};
+  }
+}
+
+/** Read library-scoped stores, assigning the earlier unscoped format to My Library. */
+export function parseLibraryStores(
+  text: string | undefined,
+  userLibraryID: number
+): LibraryProposalStores {
+  try {
+    const value = JSON.parse(text || "{}");
+    if (
+      value?.version === 1 &&
+      value.libraries &&
+      typeof value.libraries === "object"
+    ) {
+      return Object.fromEntries(
+        Object.entries(value.libraries)
+          .filter(([libraryID]) => /^\d+$/.test(libraryID))
+          .map(([libraryID, store]) => [
+            libraryID,
+            parseStore(JSON.stringify(store)),
+          ])
+      );
+    }
+    const legacy = parseStore(text);
+    return Object.keys(legacy).length > 0 ? { [userLibraryID]: legacy } : {};
   } catch {
     return {};
   }
@@ -134,7 +181,9 @@ export function addToStore(
   title: string
 ): ProposalStore {
   const next = removeItems(store, [itemKey]);
-  const entry = next[path] ?? {
+  const entry = (Object.prototype.hasOwnProperty.call(next, path)
+    ? next[path]
+    : undefined) ?? {
     parentID: proposal.parentID,
     name: proposal.name.trim(),
     items: {},
@@ -148,7 +197,7 @@ export function addToStore(
 }
 
 /**
- * Remove items from every proposal, dropping proposals left empty
+ * Remove items from every proposal, preserving dismissed topics even when empty
  * @param store - The current store
  * @param itemKeys - Keys to remove
  * @returns A new store
@@ -158,16 +207,24 @@ export function removeItems(
   itemKeys: string[]
 ): ProposalStore {
   const drop = new Set(itemKeys);
-  const next: ProposalStore = {};
-  for (const [path, entry] of Object.entries(store)) {
-    const items = Object.fromEntries(
-      Object.entries(entry.items).filter(([key]) => !drop.has(key))
-    );
-    if (Object.keys(items).length > 0) {
-      next[path] = { ...entry, items };
-    }
-  }
-  return next;
+  return Object.fromEntries(
+    Object.entries(store)
+      .map(
+        ([path, entry]) =>
+          [
+            path,
+            {
+              ...entry,
+              items: Object.fromEntries(
+                Object.entries(entry.items).filter(([key]) => !drop.has(key))
+              ),
+            },
+          ] as const
+      )
+      .filter(
+        ([, entry]) => Object.keys(entry.items).length > 0 || entry.dismissed
+      )
+  );
 }
 
 /**

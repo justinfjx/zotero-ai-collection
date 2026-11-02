@@ -1,19 +1,21 @@
-const STREAM_GLOBALS = [
+const SDK_GLOBALS = [
   "TransformStream",
   "ReadableStream",
   "WritableStream",
   "TextDecoderStream",
   "TextEncoderStream",
+  "AbortController",
+  "AbortSignal",
 ];
 
 /**
- * Copy web stream globals and console that Zotero's plugin sandbox lacks from the main window.
+ * Copy stream, request-cancellation and console globals from the main window.
  * Must run after the main window exists and before libraries that use them load.
  * @param win - The Zotero main window
  */
 export function exposeWebGlobals(win: Window): void {
   const target = globalThis as Record<string, any>;
-  for (const name of STREAM_GLOBALS) {
+  for (const name of SDK_GLOBALS) {
     if (typeof target[name] === "undefined") {
       target[name] = (win as any)[name];
     }

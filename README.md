@@ -11,7 +11,7 @@
 [![README - English](https://img.shields.io/badge/README-English-blue?style=flat-square)](README.md)
 [![README - 中文](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-red?style=flat-square)](README-zh.md)
 
-Use an LLM (an OpenAI Chat Completions compatible API) to recommend Zotero collections based on each item's **title + abstract**, with a **reviewable** confirmation dialog: you decide which collections to add, whether to reject, and whether to archive.
+Use an LLM (Anthropic or an OpenAI-compatible API) to recommend Zotero collections based on each item's **title + abstract**, with a **reviewable** confirmation dialog: you decide which collections to add, whether to reject, and whether to archive.
 
 [![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
 [![zotero target version](https://img.shields.io/badge/Zotero-8-blue?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org/support/beta_builds)
@@ -157,7 +157,7 @@ The settings page has 8 sections:
 - **Let the AI suggest new collections** (off by default): when no existing collection fits an item, the AI may suggest a new one under an existing collection. Such items stay unfiled and are remembered
 - **Items needed** (default 10): once this many items share the same suggestion you are asked to **create it and move the items in**, **not now** (asked again when more items join), or **don't suggest again**
 - **Allow new top-level collections**: off by default; suggestions must then go under an existing collection
-- The maximum depth applies to suggested collections too
+- Suggestions respect the selected collection scope and maximum depth. Pending suggestions are kept separately for each library; only live, unfiled items count toward the threshold and are filed on acceptance
 
 ### 8) Translation
 
@@ -178,7 +178,9 @@ The API root is the `API Full URL` without a trailing `/chat/completions` or `/m
 
 ### Output format
 
-The model is asked for a structured JSON object, and the answer is validated before it is used:
+For OpenAI-compatible servers, the JSON schema is included in the prompt and the answer is validated locally. This keeps existing profiles working with servers that support ordinary Chat Completions. Anthropic uses the SDK's structured-output support. Each request has a 60-second timeout.
+
+The model returns a JSON object:
 
 ```json
 { "collectionIDs": [101, 205] }
@@ -218,9 +220,11 @@ Yes. Batch mode calls the AI for all selected items first, then shows a summary 
 
 ## 🛠️ Development & Build
 
+Requires Node.js 22 or newer.
+
 ```bash
 cd zotero-ai-collection
-npm install
+npm ci
 npm run build
 npm test
 ```

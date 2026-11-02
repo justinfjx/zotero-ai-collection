@@ -9,6 +9,7 @@ const DEFAULT_THRESHOLD = 5;
 let observerID: string | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let running = false;
+let rerunRequested = false;
 // Items already offered for classification this session, so rejected ones don't re-trigger.
 const offered = new Set<number>();
 
@@ -44,24 +45,44 @@ export async function classifyUnfiled(): Promise<void> {
 }
 
 async function autoClassify(): Promise<void> {
-  if (running || !getPref("autoClassifyUnfiled")) {
+  if (running) {
+    rerunRequested = true;
     return;
   }
-  const threshold =
-    Number(getPref("autoClassifyThreshold")) || DEFAULT_THRESHOLD;
-  const fresh = (await getUnfiledItems()).filter((i) => !offered.has(i.id));
-  if (fresh.length <= threshold) {
+  if (!observerID || !getPref("autoClassifyUnfiled")) {
     return;
   }
   running = true;
   try {
+    const threshold =
+      Number(getPref("autoClassifyThreshold")) || DEFAULT_THRESHOLD;
+    const fresh = (await getUnfiledItems()).filter((i) => !offered.has(i.id));
+    if (
+      !observerID ||
+      !getPref("autoClassifyUnfiled") ||
+      fresh.length <= threshold
+    ) {
+      return;
+    }
     fresh.forEach((i) => offered.add(i.id));
     await classifyItems(fresh);
   } catch (e) {
     ztoolkit.log("Auto-classify failed:", e);
   } finally {
     running = false;
+    if (rerunRequested && observerID) {
+      rerunRequested = false;
+      scheduleAutoClassify();
+    }
   }
+}
+
+function scheduleAutoClassify(): void {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    timer = undefined;
+    void autoClassify();
+  }, DEBOUNCE_MS);
 }
 
 /**
@@ -74,8 +95,7 @@ export function registerUnfiledObserver(): void {
         if (event !== "add") {
           return;
         }
-        clearTimeout(timer);
-        timer = setTimeout(autoClassify, DEBOUNCE_MS);
+        scheduleAutoClassify();
       },
     },
     ["item"],
@@ -85,6 +105,9 @@ export function registerUnfiledObserver(): void {
 
 export function unregisterUnfiledObserver(): void {
   clearTimeout(timer);
+  timer = undefined;
+  rerunRequested = false;
+  offered.clear();
   if (observerID) {
     Zotero.Notifier.unregisterObserver(observerID);
     observerID = undefined;
