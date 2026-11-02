@@ -238,7 +238,7 @@ npm test
 npm run release
 ```
 
-This uses `release-it` to bump versions, build, push, and create a GitHub Release (requires `GITHUB_TOKEN`).
+`release-it` updates the version and update manifests, builds locally, and pushes the release commit and `v` tag. The tag triggers the **Release** workflow, which builds and publishes the XPI on GitHub. Check that workflow's result before sharing the release. GitHub API authentication for publishing is handled by the workflow's built-in token.
 
 ## 📄 License
 

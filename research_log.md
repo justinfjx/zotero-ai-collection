@@ -1,5 +1,12 @@
 # 实验记录
 
+## 2026-11-02 - 工作流精简与发布入口统一
+
+- 删除自动关闭、标记及评论 Issue 的工作流，移除发布后自动留言步骤；保留 PR 检查、Dependabot 和版本标签触发的 XPI 发布。
+- 关闭 `release-it` 的 GitHub 发布和附件上传配置，由 GitHub Actions 创建 Release 并上传 XPI。保留本地构建钩子，继续生成版本更新清单；发布命令完成后提示等待 Actions 发布。
+- 发布工作流仅保留 `contents: write` 权限，令牌放在创建 Release 的步骤中，检出步骤关闭凭据持久化。中英文发布说明同步更新。
+- 验证：YAML/JSON 配置检查、`release-it` dry-run、隔离的发布命令模拟和 `git diff --check` 均通过。
+
 ## 2026-11-02 - PR #11 审查与修复
 
 - 范围：[PR #11](https://github.com/justinfjx/zotero-ai-collection/pull/11)，修复前 head 为 `40d472941630710a4a510952f5c8ba48d1751b07`。

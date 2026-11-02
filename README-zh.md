@@ -238,7 +238,7 @@ npm test
 npm run release
 ```
 
-该命令使用 `release-it`：自动增版本、构建、推送与创建 GitHub Release（需要设置 `GITHUB_TOKEN`）。
+`release-it` 更新版本号与更新清单、在本地构建，并推送发布提交和 `v` 标签。标签触发 **Release** 工作流，由工作流构建 XPI 并发布到 GitHub。分享版本前，先确认该工作流成功。发布所需的 GitHub API 鉴权由工作流内置令牌提供。
 
 ## 📄 License
 
