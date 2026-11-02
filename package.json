@@ -9,7 +9,7 @@
     "addonInstance": "ZoteroAICollection",
     "prefsPrefix": "extensions.zotero.zoteroaicollection",
     "releasepage": "https://github.com/justinfjx/zotero-ai-collection/releases/latest/download/zotero-ai-collection.xpi",
-    "updaterdf": "https://raw.githubusercontent.com/justinfjx/zotero-ai-collection/main/update.json"
+    "updaterdf": "https://raw.githubusercontent.com/justinfjx/zotero-ai-collection/bootstrap/update.json"
   },
   "main": "src/index.ts",
   "scripts": {
