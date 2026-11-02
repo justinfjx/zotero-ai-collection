@@ -1,82 +1,90 @@
+import { z } from "zod";
 import { getPref } from "../utils/prefs";
+import { exposeWebGlobals } from "../utils/webGlobals";
 import { DEFAULT_PROMPT } from "../utils/constants";
+import type { ProviderKind } from "./llm";
+import type { NewCollectionProposal } from "./proposals";
+import { parseCollectionSelection } from "./selection";
 
 export interface AICollectionCandidate {
   id: number;
   path: string;
 }
 
-interface AIClassificationResult {
+export interface AIClassificationResult {
   collectionIDs: number[];
   collections: string[];
   chineseTitle?: string;
+  newCollection?: NewCollectionProposal;
 }
+
+/** What the AI needs to know to suggest a new collection */
+export interface ProposalOptions {
+  /** Existing collections a new collection can be placed under */
+  parents: AICollectionCandidate[];
+  allowTopLevel: boolean;
+  /** Deepest level a new collection may have (0 = unlimited) */
+  maxDepth: number;
+  /** Paths already suggested, to be reused when the topic matches */
+  openPaths: string[];
+}
+
+const baseSchema = z.object({
+  collectionIDs: z.array(z.union([z.number(), z.string()])),
+  chineseTitle: z.string().optional(),
+});
+
+// Only sent when the AI may suggest a new collection
+const proposalSchema = baseSchema.extend({
+  newCollection: z
+    .object({ parentID: z.number().nullable(), name: z.string() })
+    .nullish(),
+});
 
 // Hidden format instruction - not editable by user
-const FORMAT_INSTRUCTION = `规则：可用分类每行格式为 [分类ID] 分类路径。只能选择列表中已存在的分类ID，返回 JSON 数组，数组元素必须是数字ID，不要返回分类路径。
-示例格式：
-- 单个分类: [101]
-- 多个分类: [101, 205, 309]
-- 无合适分类: []`;
+const FORMAT_INSTRUCTION = `Rules: each available collection is listed as [ID] path. Choose only collections that exist in the list and return their numeric IDs as an array in the collectionIDs field, not their paths. If no collection fits, return an empty array.`;
 
 // Hidden translation instruction - appended when translation is enabled
-const TRANSLATION_INSTRUCTION = `另外，请将文献标题翻译成中文，在返回的JSON中增加一个"chineseTitle"字段。
-返回格式示例：
-- 单个分类: {"collectionIDs": [101], "chineseTitle": "中文标题"}
-- 多个分类: {"collectionIDs": [101, 205], "chineseTitle": "中文标题"}
-- 无合适分类: {"collectionIDs": [], "chineseTitle": "中文标题"}`;
+const TRANSLATION_INSTRUCTION = `Also translate the paper title into Chinese and put it in the chineseTitle field.`;
 
-function parseCollectionSelection(value: unknown): {
-  collectionIDs: number[];
-  collections: string[];
-} {
-  const collectionIDs: number[] = [];
-  const collections: string[] = [];
-
-  if (!Array.isArray(value)) {
-    return { collectionIDs, collections };
-  }
-
-  for (const item of value) {
-    if (typeof item === "number" && Number.isFinite(item)) {
-      collectionIDs.push(item);
-      continue;
-    }
-
-    if (typeof item === "string") {
-      const trimmed = item.trim();
-      if (!trimmed) {
-        continue;
-      }
-
-      if (/^\d+$/.test(trimmed)) {
-        collectionIDs.push(Number(trimmed));
-      } else {
-        collections.push(trimmed);
-      }
-    }
-  }
-
-  return {
-    collectionIDs: Array.from(new Set(collectionIDs)),
-    collections: Array.from(new Set(collections)),
-  };
+/**
+ * Build the instruction that lets the AI suggest a new collection
+ * @param options - Limits for the suggestion
+ * @returns The instruction text
+ */
+function buildProposalInstruction(options: ProposalOptions): string {
+  const top = options.allowTopLevel
+    ? ", or null to create a top-level collection"
+    : ", top-level collections are not allowed";
+  const depth =
+    options.maxDepth > 0
+      ? ` The new collection must not be deeper than level ${options.maxDepth}.`
+      : "";
+  return `For unmatched papers, this rule takes precedence over instructions to use existing collections only: you may suggest one new collection in the newCollection field. parentID is the ID of its parent (choose only from the "Possible parents" list${top}) and name is the new collection's name (short, without "/"). Suggest one only when nothing fits; otherwise omit newCollection.${depth}`;
 }
 
-function parseSelectionArrayFromContent(content: string): {
-  collectionIDs: number[];
-  collections: string[];
-} {
-  const arrayMatch = content.match(/\[[\s\S]*?\]/);
-  if (!arrayMatch) {
-    return { collectionIDs: [], collections: [] };
-  }
+/**
+ * Build the part of the user prompt that lists parents and open suggestions
+ * @param options - Limits for the suggestion
+ * @returns The prompt text
+ */
+function buildProposalContext(options: ProposalOptions): string {
+  const parents = options.parents.map((p) => `[${p.id}] ${p.path}`).join("\n");
+  const open = options.openPaths.length
+    ? `\n\nAlready suggested new collections (use the exact same name for the same topic):\n${options.openPaths.join(
+        "\n"
+      )}`
+    : "";
+  return `\n\nPossible parents:\n${parents}${open}`;
+}
 
-  try {
-    return parseCollectionSelection(JSON.parse(arrayMatch[0]));
-  } catch {
-    return { collectionIDs: [], collections: [] };
-  }
+/**
+ * Load the LLM layer. The AI SDK needs web stream globals that Zotero's plugin
+ * sandbox lacks, so it is imported lazily, after they are copied from the main window.
+ */
+async function loadLLM() {
+  exposeWebGlobals(Zotero.getMainWindow());
+  return import("./llm");
 }
 
 /**
@@ -85,17 +93,20 @@ function parseSelectionArrayFromContent(content: string): {
  * @param abstract - Article abstract
  * @param collectionCandidates - Available collection IDs and display paths
  * @param includeTranslation - Whether to include Chinese title translation
+ * @param proposals - When set, the AI may suggest one new collection
  * @returns Object with recommended collection paths and optional Chinese title
  */
 export async function callAI(
   title: string,
   abstract: string,
   collectionCandidates: AICollectionCandidate[],
-  includeTranslation: boolean = false
+  includeTranslation = false,
+  proposals?: ProposalOptions
 ): Promise<AIClassificationResult> {
   const apiUrl = getPref("apiUrl") as string;
   const model = getPref("model") as string;
   const apiKey = getPref("apiKey") as string;
+  const provider = (getPref("provider") as ProviderKind) || "openai-compatible";
   const customPrompt = (getPref("customPrompt") as string) || DEFAULT_PROMPT;
 
   if (!apiUrl || !apiKey) {
@@ -107,79 +118,38 @@ export async function callAI(
     .join("\n");
 
   // Build system prompt with user-editable part and hidden format instruction
-  let systemPrompt = `${customPrompt}\n${FORMAT_INSTRUCTION}`;
+  const systemPrompt = [
+    customPrompt,
+    FORMAT_INSTRUCTION,
+    includeTranslation ? TRANSLATION_INSTRUCTION : "",
+    proposals ? buildProposalInstruction(proposals) : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
-  if (includeTranslation) {
-    systemPrompt = `${customPrompt}\n${TRANSLATION_INSTRUCTION}`;
-  }
+  const userPrompt = `Title: ${title}
+Abstract: ${abstract}
 
-  const userPrompt = `标题: ${title}
-摘要: ${abstract}
+Available collections:
+${collectionListStr}${proposals ? buildProposalContext(proposals) : ""}`;
 
-可用分类:
-${collectionListStr}
+  const schema: z.ZodType<z.infer<typeof proposalSchema>> = proposals
+    ? proposalSchema
+    : baseSchema;
 
-返回 JSON${
-    includeTranslation ? " (包含collectionIDs数组和chineseTitle字段)" : " 数组"
-  }:`;
+  const { generateJSON, toBaseURL } = await loadLLM();
+  const result = await generateJSON(
+    { provider, baseURL: toBaseURL(apiUrl), apiKey, model },
+    systemPrompt,
+    userPrompt,
+    schema
+  );
 
-  // Log the full prompt to Error Console for debugging
-  // Zotero.log("[AI-Collection] ========== 发送给LLM的完整Prompt ==========");
-  // Zotero.log("[AI-Collection] API URL: " + apiUrl);
-  // Zotero.log("[AI-Collection] Model: " + model);
-  // Zotero.log("[AI-Collection] --- System Prompt ---");
-  // Zotero.log(systemPrompt);
-  // Zotero.log("[AI-Collection] --- User Prompt ---");
-  // Zotero.log(userPrompt);
-  // Zotero.log("[AI-Collection] ================================================");
-
-  const response = await Zotero.HTTP.request("POST", apiUrl, {
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 500,
-    }),
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    responseType: "json",
-    timeout: 60000,
-  });
-
-  const content = response.response.choices[0].message.content.trim();
-
-  // Log the model's output to Error Console
-  // Zotero.log("[AI-Collection] ========== LLM返回结果 ==========");
-  // Zotero.log(content);
-  // Zotero.log("[AI-Collection] ================================");
-
-  if (includeTranslation) {
-    // Parse JSON object with collections and chineseTitle
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        const selection = parseCollectionSelection(
-          parsed.collectionIDs || parsed.ids || parsed.collections || []
-        );
-        return {
-          ...selection,
-          chineseTitle: parsed.chineseTitle || undefined,
-        };
-      } catch {
-        return parseSelectionArrayFromContent(content);
-      }
-    }
-    return parseSelectionArrayFromContent(content);
-  } else {
-    // Parse simple array
-    return parseSelectionArrayFromContent(content);
-  }
+  return {
+    ...parseCollectionSelection(result.collectionIDs),
+    chineseTitle: result.chineseTitle,
+    newCollection: result.newCollection ?? undefined,
+  };
 }
 
 /**

@@ -69,7 +69,12 @@
   - 逐篇确认（每篇跑完 AI 就弹窗，可中途取消停止）
   - 批量确认（先全部跑完 AI，再统一审核；更快，但会先产生全部请求成本）
 - 🗂️ **可控的候选分类范围**：在设置里勾选“哪些分类可被提供给 AI”（用于控制准确率与 Token 成本）
-- 🧩 **多配置方案（API Profiles）**：保存/重命名/删除多套 `API Endpoint + Model + API Key`
+- 🧩 **多配置方案（API Profiles）**：保存/重命名/删除多套 `服务商 + API Endpoint + Model + API Key`
+- 🔌 **Anthropic 或 OpenAI 兼容**：每个配置方案可单独选择服务商（OpenAI、Ollama、OpenRouter、LiteLLM 等，或直接使用 Claude）
+- 📥 **未归类条目**：通过“工具”菜单一键分类所有不在任何分类中的条目，或在未归类条目超过 N 个时自动分类（默认关闭）
+- 📏 **层级限制**：限制提供给 AI 的分类嵌套深度（也限制 AI 建议的新分类的深度）
+- 🌱 **预设分类**：根据路径列表一键创建初始分类
+- 💡 **新分类建议**（可选）：无法归入现有分类的条目会被收集；当足够多的条目共享同一个建议时，会询问是否创建该分类并移入条目
 - 🧾 **可编辑分类 Prompt**：自定义系统提示词（插件会在后台附加“输出格式要求”）
 - 🧷 **添加到路径所有父分类（可选）**
 - 📦 **拒绝并归档**：一键把条目加入一个归档分类（不存在会自动创建）
@@ -105,15 +110,16 @@
 
 ## ⚙️ 设置说明
 
-插件设置页分为 5 个部分：
+插件设置页分为 8 个部分：
 
 ### 1) API 配置
 
 - `Configuration` 下拉框：选择当前启用的 API 配置方案
 - `保存/重命名/删除`：管理多套 API 配置，便于在不同服务商之间切换
-- `API Full URL`：完整的 Chat Completions 地址（默认 `https://api.openai.com/v1/chat/completions`）
+- `服务商`：`OpenAI-compatible`（默认）或 `Anthropic`
+- `API Full URL`：OpenAI 兼容服务可填完整 Chat Completions 地址（默认 `https://api.openai.com/v1/chat/completions`）或 API 根地址；Anthropic 填 `https://api.anthropic.com/v1`
 - `Model Name`：模型名（默认 `gpt-3.5-turbo`，可改为任意服务端支持的模型名）
-- `API Key`：以 `Authorization: Bearer {API Key}` 方式放在请求头里
+- `API Key`：以 `Authorization: Bearer {API Key}` 方式放在请求头里，Anthropic 使用 `x-api-key`
 - `测试连接`：用一条测试请求检查端点可用性与返回格式
 
 ### 2) 分类 Prompt
@@ -136,7 +142,24 @@
 - **添加到路径中的所有分类**：是否把 `A/B/C` 同时加入 `A`、`A/B`、`A/B/C`
 - **归档分类名称**：点击“拒绝并移至归档”时使用；没有就自动创建（默认 `未分类`）
 
-### 5) 翻译设置
+### 5) 未归类条目
+
+- **工具 → AI 分类未归类条目**：按当前选择的处理模式，对所有不在任何分类中的普通条目进行分类
+- **自动分类未归类条目**：开启后，当未归类条目超过**阈值**（默认 5）时，在新条目停止增加几秒后自动开始分类。本次运行中已经提供过的条目不会再次提供。默认关闭
+
+### 6) 分类结构
+
+- **最大层级**：嵌套层级超过该值的分类不会提供给 AI，位于该层级的分类视为叶子分类。`0`（默认）表示不限制，`1` 表示仅顶级分类
+- **预设分类**：每行一个路径（例如 `Algorithms/Variational`，以 `#` 开头的行会被忽略）。点击“创建缺失的分类”，确认后会创建尚不存在的分类；超过最大层级的部分会被截断
+
+### 7) 新建分类
+
+- **允许 AI 建议新建分类**（默认关闭）：当没有现有分类适合某个条目时，AI 可建议在某个现有分类下新建分类。这些条目保持未归类并被记录
+- **所需条目数**（默认 10）：当这么多条目共享同一个建议时，会询问你**创建并移入条目**、**暂不**（有更多条目加入后再询问）或**不再建议**
+- **允许新建顶级分类**：默认关闭；关闭时建议必须位于某个现有分类之下
+- 建议遵循已勾选的分类范围和最大层级。待处理建议按文库分别保存；达到阈值和确认归类时，只计算仍存在且未归类的条目
+
+### 8) 翻译设置
 
 - `在确认对话框中启用中文标题翻译`：开启后会让模型额外返回 `chineseTitle`，仅用于 UI 展示
 
@@ -144,38 +167,26 @@
 
 ### API 调用方式
 
-本插件按 **OpenAI Chat Completions** 的请求/响应结构调用接口：
+请求通过 [AI SDK](https://ai-sdk.dev/) 发送，取决于配置方案中的**服务商**：
 
-- 请求：`POST {API Full URL}`
-- 请求头：`Authorization: Bearer {API Key}`、`Content-Type: application/json`
-- 请求体：`{ model, messages, temperature, max_tokens }`
-- 响应：需要能从 `choices[0].message.content` 取到模型输出文本
+- **OpenAI 兼容**：`POST {API 根地址}/chat/completions`，请求头 `Authorization: Bearer {API Key}`。适用于 OpenAI 以及 Ollama、OpenRouter、LiteLLM 等 OpenAI 兼容网关
+- **Anthropic**：`POST {API 根地址}/messages`，请求头 `x-api-key` 与 `anthropic-version`
 
-因此，只要你的服务端**兼容上述结构**（例如 OpenAI 兼容网关/反向代理/部分第三方聚合服务），一般即可使用。
+API 根地址即去掉末尾 `/chat/completions` 或 `/messages` 的 `API Full URL`，因此旧版本保存的配置方案仍可使用。
 
-> 注意：如果你的服务商需要 `api-key` 等其它鉴权头，或使用 Responses API 而不是 Chat Completions，本插件目前不支持，需要你通过网关转换或自行改代码适配。
+> 注意：需要 `api-key` 等其它鉴权头、或只提供 Responses API 的服务商不能直接使用，请在前面加一层 OpenAI 兼容网关。
 
-### 输出格式要求（非常重要）
+### 输出格式
 
-模型输出必须包含可解析的 JSON（建议输出**纯 JSON**，不要加 Markdown code fence、不要输出解释）。
+OpenAI 兼容服务通过 Prompt 接收 JSON Schema，插件在本地校验返回值，使原有普通 Chat Completions 配置可继续使用。Anthropic 使用 SDK 的结构化输出功能。每次请求限时 60 秒。
 
-#### 默认模式（未开启中文标题翻译）
-
-输出 **JSON 数组**（只能是已存在的完整路径，不能编造新路径）：
+模型返回 JSON 对象：
 
 ```json
-["分类A/子分类B", "分类C"]
+{ "collectionIDs": [101, 205] }
 ```
 
-#### 翻译模式（开启中文标题翻译）
-
-输出 **JSON 对象**（包含 `collections` 数组与 `chineseTitle` 字段）：
-
-```json
-{"collections":["分类A/子分类B"],"chineseTitle":"中文标题"}
-```
-
-插件会过滤掉“在 Zotero 里不存在”的路径；如果全部无效，会提示“未找到合适的分类”。
+开启中文标题翻译时还会包含 `"chineseTitle"`；开启新分类建议时可能包含 `"newCollection": { "parentID": 101, "name": "..." }`。不合法的返回会被拒绝，在 Zotero 中不存在的 ID 会被忽略；如果没有任何有效结果，会提示“未找到合适的分类”。
 
 ## 🔒 隐私、成本与安全
 
@@ -209,10 +220,13 @@
 
 ## 🛠️ 开发与构建
 
+需要 Node.js 22 或更高版本。
+
 ```bash
 cd zotero-ai-collection
-npm install
+npm ci
 npm run build
+npm test
 ```
 
 - 构建产物：`builds/zotero-ai-collection.xpi`

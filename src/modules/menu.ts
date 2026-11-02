@@ -1,6 +1,7 @@
 import { config } from "../../package.json";
 import { getString } from "../utils/locale";
 import { classifyItems } from "./classifier";
+import { classifyUnfiled } from "./unfiled";
 
 /**
  * Register right-click menu item for AI classification
@@ -22,6 +23,15 @@ export function registerMenu(): void {
       }
       await classifyItems(items);
     },
+    icon: menuIcon,
+  });
+
+  ztoolkit.Menu.register("menuTools", {
+    tag: "menuitem",
+    id: `zotero-toolsmenu-${config.addonRef}-classify-unfiled`,
+    label:
+      getString("menuitem.aiclassifyunfiled") || "AI Classify Unfiled Items",
+    commandListener: () => classifyUnfiled(),
     icon: menuIcon,
   });
 }

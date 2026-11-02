@@ -11,14 +11,14 @@ if (typeof Zotero == "undefined") {
 
 var chromeHandle;
 
-// Import Services module - compatible with Zotero 7, 8, 9, and 10
+// Services is a global in Zotero 7+; only import it where it is missing.
 var Services;
-try {
-  // Zotero 8+ (Firefox 128+) uses importESModule
-  Services = ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs").default;
-} catch (e) {
-  // Fallback for Zotero 7
-  Services = ChromeUtils.import("resource://gre/modules/Services.jsm").Services;
+if (typeof Services === "undefined") {
+  try {
+    Services = ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs").default;
+  } catch (e) {
+    Services = ChromeUtils.import("resource://gre/modules/Services.jsm").Services;
+  }
 }
 
 // In Zotero 7+, bootstrap methods are not called until Zotero is initialized,

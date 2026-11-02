@@ -36,6 +36,22 @@
       </hbox>
 
       <hbox align="center" style="margin-bottom: 8px;">
+        <html:label id="zotero-prefpane-__addonRef__-providerLabel" for="zotero-prefpane-__addonRef__-provider" style="width: 120px;"
+          >Provider</html:label
+        >
+        <menulist
+          id="zotero-prefpane-__addonRef__-provider"
+          preference="__prefsPrefix__.provider"
+          style="flex: 1; min-width: 200px;"
+        >
+          <menupopup>
+            <menuitem label="OpenAI-compatible" value="openai-compatible" />
+            <menuitem label="Anthropic" value="anthropic" />
+          </menupopup>
+        </menulist>
+      </hbox>
+
+      <hbox align="center" style="margin-bottom: 8px;">
         <html:label id="zotero-prefpane-__addonRef__-apiUrlLabel" for="zotero-prefpane-__addonRef__-apiUrl" style="width: 120px;"
           >API Endpoint</html:label
         >
@@ -208,6 +224,105 @@
       </hbox>
       <html:label id="zotero-prefpane-__addonRef__-archiveHelp" style="margin-left: 20px; color: #666; font-size: 11px;">
         The collection name for "Reject &amp; Archive" button. Will be created if it doesn't exist.
+      </html:label>
+    </vbox>
+  </groupbox>
+
+  <groupbox>
+    <label><html:h2 id="zotero-prefpane-__addonRef__-unfiledTitle">Unfiled Items</html:h2></label>
+    <vbox style="margin: 10px 0;">
+      <hbox align="center" style="margin-bottom: 8px;">
+        <checkbox
+          id="zotero-prefpane-__addonRef__-autoClassifyUnfiled"
+          preference="__prefsPrefix__.autoClassifyUnfiled"
+          label=""
+        />
+      </hbox>
+      <hbox align="center">
+        <html:label id="zotero-prefpane-__addonRef__-autoClassifyThresholdLabel" for="zotero-prefpane-__addonRef__-autoClassifyThreshold" style="width: 180px;"
+          >Threshold</html:label
+        >
+        <html:input
+          type="number"
+          min="1"
+          id="zotero-prefpane-__addonRef__-autoClassifyThreshold"
+          preference="__prefsPrefix__.autoClassifyThreshold"
+          style="width: 80px;"
+        />
+      </hbox>
+      <html:label id="zotero-prefpane-__addonRef__-autoClassifyHelp" style="margin-left: 20px; color: #666; font-size: 11px;">
+        When enabled, items are classified automatically once more than this many unfiled items have accumulated. You can also run Tools &gt; AI Classify Unfiled Items at any time.
+      </html:label>
+    </vbox>
+  </groupbox>
+
+  <groupbox>
+    <label><html:h2 id="zotero-prefpane-__addonRef__-structureTitle">Collection Structure</html:h2></label>
+    <vbox style="margin: 10px 0;">
+      <hbox align="center">
+        <html:label id="zotero-prefpane-__addonRef__-maxDepthLabel" for="zotero-prefpane-__addonRef__-maxDepth" style="width: 180px;"
+          >Maximum Depth</html:label
+        >
+        <html:input
+          type="number"
+          min="0"
+          id="zotero-prefpane-__addonRef__-maxDepth"
+          preference="__prefsPrefix__.maxDepth"
+          style="width: 80px;"
+        />
+      </hbox>
+      <html:label id="zotero-prefpane-__addonRef__-maxDepthHelp" style="margin-left: 20px; color: #666; font-size: 11px;">
+        Collections nested deeper than this level are not offered to the AI; a collection at this level is treated as a leaf. 0 means no limit.
+      </html:label>
+
+      <html:label id="zotero-prefpane-__addonRef__-seedLabel" style="margin-top: 12px; font-weight: bold;">Seed Collections</html:label>
+      <html:label id="zotero-prefpane-__addonRef__-seedHelp" style="margin-bottom: 5px; color: #666; font-size: 11px;">
+        One collection path per line, e.g. Algorithms/Variational. Lines starting with # are ignored.
+      </html:label>
+      <html:textarea
+        id="zotero-prefpane-__addonRef__-seedCollections"
+        style="width: 100%; min-height: 80px; resize: vertical; font-family: monospace;"
+      ></html:textarea>
+      <hbox style="margin-top: 8px;">
+        <button
+          id="zotero-prefpane-__addonRef__-createSeed"
+          label=""
+        />
+      </hbox>
+    </vbox>
+  </groupbox>
+
+  <groupbox>
+    <label><html:h2 id="zotero-prefpane-__addonRef__-proposalsTitle">New Collections</html:h2></label>
+    <vbox style="margin: 10px 0;">
+      <hbox align="center" style="margin-bottom: 8px;">
+        <checkbox
+          id="zotero-prefpane-__addonRef__-proposeNewCollections"
+          preference="__prefsPrefix__.proposeNewCollections"
+          label=""
+        />
+      </hbox>
+      <hbox align="center" style="margin-bottom: 8px;">
+        <html:label id="zotero-prefpane-__addonRef__-proposalMinItemsLabel" for="zotero-prefpane-__addonRef__-proposalMinItems" style="width: 180px;"
+          >Items needed</html:label
+        >
+        <html:input
+          type="number"
+          min="1"
+          id="zotero-prefpane-__addonRef__-proposalMinItems"
+          preference="__prefsPrefix__.proposalMinItems"
+          style="width: 80px;"
+        />
+      </hbox>
+      <hbox align="center" style="margin-bottom: 8px;">
+        <checkbox
+          id="zotero-prefpane-__addonRef__-allowNewTopLevel"
+          preference="__prefsPrefix__.allowNewTopLevel"
+          label=""
+        />
+      </hbox>
+      <html:label id="zotero-prefpane-__addonRef__-proposalsHelp" style="margin-left: 20px; color: #666; font-size: 11px;">
+        When enabled, the AI may suggest a new collection for items that fit nowhere. Those items stay unfiled until enough of them share a suggestion; then you are asked whether to create the collection and move them in. The maximum depth above applies to new collections too.
       </html:label>
     </vbox>
   </groupbox>

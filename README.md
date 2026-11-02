@@ -11,7 +11,7 @@
 [![README - English](https://img.shields.io/badge/README-English-blue?style=flat-square)](README.md)
 [![README - 中文](https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-red?style=flat-square)](README-zh.md)
 
-Use an LLM (an OpenAI Chat Completions compatible API) to recommend Zotero collections based on each item's **title + abstract**, with a **reviewable** confirmation dialog: you decide which collections to add, whether to reject, and whether to archive.
+Use an LLM (Anthropic or an OpenAI-compatible API) to recommend Zotero collections based on each item's **title + abstract**, with a **reviewable** confirmation dialog: you decide which collections to add, whether to reject, and whether to archive.
 
 [![zotero target version](https://img.shields.io/badge/Zotero-7-green?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org)
 [![zotero target version](https://img.shields.io/badge/Zotero-8-blue?style=flat-square&logo=zotero&logoColor=CC2936)](https://www.zotero.org/support/beta_builds)
@@ -69,7 +69,12 @@ By default, the plugin **does not create new collections** (except the “archiv
   - Per-item review (shows a dialog after each AI call; you can cancel anytime)
   - Batch review (calls AI for all items first, then shows a summary review window; faster, but costs are incurred upfront)
 - 🗂️ **Controllable candidate collection scope**: choose which collection branches can be provided to the AI (controls accuracy and token cost)
-- 🧩 **Multiple API Profiles**: save/rename/delete multiple `API Endpoint + Model + API Key` configs
+- 🧩 **Multiple API Profiles**: save/rename/delete multiple `Provider + API Endpoint + Model + API Key` configs
+- 🔌 **Anthropic or OpenAI-compatible**: pick the provider per profile (OpenAI, Ollama, OpenRouter, LiteLLM, … or Claude directly)
+- 📥 **Unfiled items**: classify everything that is in no collection from the Tools menu, or automatically once more than N items are unfiled (off by default)
+- 📏 **Depth limit**: decide how deep collections may nest when offered to the AI (and when it suggests new ones)
+- 🌱 **Seed collections**: create a starting set of collections from a list of paths
+- 💡 **New collection suggestions** (optional): items that fit nowhere are collected; once enough share a suggestion you are asked whether to create the collection and move them in
 - 🧾 **Editable collection prompt**: customize the system prompt (the plugin will append output-format requirements in the background)
 - 🧷 **Add to all parent collections in the path** (optional)
 - 📦 **Reject & archive**: one-click to move items into an archive collection (auto-created if missing)
@@ -105,15 +110,16 @@ See “Development & Build” below.
 
 ## ⚙️ Settings
 
-The settings page has 5 sections:
+The settings page has 8 sections:
 
 ### 1) API Configuration
 
 - `Configuration` dropdown: select the active API profile
 - `Save/Rename/Delete`: manage multiple API profiles for switching between providers
-- `API Full URL`: full Chat Completions URL (default `https://api.openai.com/v1/chat/completions`)
+- `Provider`: `OpenAI-compatible` (default) or `Anthropic`
+- `API Full URL`: the API address. For OpenAI-compatible servers use the Chat Completions URL (default `https://api.openai.com/v1/chat/completions`) or just the API root (`https://api.openai.com/v1`); for Anthropic use `https://api.anthropic.com/v1`
 - `Model Name`: model name (default `gpt-3.5-turbo`, can be any model supported by your server)
-- `API Key`: sent as `Authorization: Bearer {API Key}`
+- `API Key`: sent as `Authorization: Bearer {API Key}` (`x-api-key` for Anthropic)
 - `Test Connection`: sends a test request to check endpoint availability and response format
 
 ### 2) Collection Prompt
@@ -136,7 +142,24 @@ The settings page has 5 sections:
 - **Add to all collections in the path**: whether to add `A/B/C` to `A`, `A/B`, and `A/B/C`
 - **Archive collection name**: used when clicking “Reject & archive”; auto-created if missing (default `未分类`)
 
-### 5) Translation
+### 5) Unfiled Items
+
+- **Tools → AI Classify Unfiled Items**: classifies every regular item that is in no collection, using your selected processing mode
+- **Automatically classify unfiled items**: when enabled, classification starts once more than the **threshold** (default 5) items are unfiled, a few seconds after new items stop arriving. Items you were already offered in this session are not offered again. Off by default
+
+### 6) Collection Structure
+
+- **Maximum depth**: collections nested deeper than this level are not offered to the AI, and a collection at this level counts as a leaf. `0` (default) means no limit; `1` means top-level collections only
+- **Seed collections**: one path per line (e.g. `Algorithms/Variational`; lines starting with `#` are ignored). **Create Missing Collections** creates what does not exist yet, after asking for confirmation. Paths deeper than the maximum depth are cut off
+
+### 7) New Collections
+
+- **Let the AI suggest new collections** (off by default): when no existing collection fits an item, the AI may suggest a new one under an existing collection. Such items stay unfiled and are remembered
+- **Items needed** (default 10): once this many items share the same suggestion you are asked to **create it and move the items in**, **not now** (asked again when more items join), or **don't suggest again**
+- **Allow new top-level collections**: off by default; suggestions must then go under an existing collection
+- Suggestions respect the selected collection scope and maximum depth. Pending suggestions are kept separately for each library; only live, unfiled items count toward the threshold and are filed on acceptance
+
+### 8) Translation
 
 - `Enable Chinese title translation in confirmation dialog`: if enabled, the model returns an extra `chineseTitle` field, only for UI display
 
@@ -144,38 +167,26 @@ The settings page has 5 sections:
 
 ### API call
 
-This plugin calls the API using the **OpenAI Chat Completions** request/response structure:
+Requests are sent through the [AI SDK](https://ai-sdk.dev/), based on the profile's **Provider**:
 
-- Request: `POST {API Full URL}`
-- Headers: `Authorization: Bearer {API Key}`, `Content-Type: application/json`
-- Body: `{ model, messages, temperature, max_tokens }`
-- Response: the plugin reads the model output text from `choices[0].message.content`
+- **OpenAI-compatible**: `POST {API root}/chat/completions` with `Authorization: Bearer {API Key}`. Works with OpenAI and with OpenAI-compatible gateways such as Ollama, OpenRouter or LiteLLM
+- **Anthropic**: `POST {API root}/messages` with `x-api-key` and `anthropic-version` headers
 
-So as long as your server **is compatible with the structure above** (e.g. an OpenAI-compatible gateway/reverse proxy, or some third-party aggregator services), it should work.
+The API root is the `API Full URL` without a trailing `/chat/completions` or `/messages`, so profiles saved by earlier versions keep working.
 
-> Note: if your provider requires other auth headers like `api-key`, or uses the Responses API instead of Chat Completions, this plugin does not currently support it. You’ll need a gateway to adapt the API, or modify the code yourself.
+> Note: providers that need other auth headers (e.g. `api-key`) or only offer the Responses API are not supported directly. Put an OpenAI-compatible gateway in front of them.
 
-### Output format (very important)
+### Output format
 
-The model output must contain parseable JSON (prefer **raw JSON** only: no Markdown code fences, no explanations).
+For OpenAI-compatible servers, the JSON schema is included in the prompt and the answer is validated locally. This keeps existing profiles working with servers that support ordinary Chat Completions. Anthropic uses the SDK's structured-output support. Each request has a 60-second timeout.
 
-#### Default mode (Chinese title translation disabled)
-
-Output a **JSON array** (must be existing full paths; do not invent new paths):
+The model returns a JSON object:
 
 ```json
-["Collection A/Subcollection B", "Collection C"]
+{ "collectionIDs": [101, 205] }
 ```
 
-#### Translation mode (Chinese title translation enabled)
-
-Output a **JSON object** (with a `collections` array and a `chineseTitle` field):
-
-```json
-{"collections":["Collection A/Subcollection B"],"chineseTitle":"Chinese title"}
-```
-
-The plugin filters out paths that do not exist in Zotero. If all paths are invalid, it will show “No suitable collections found”.
+With Chinese title translation enabled it also contains `"chineseTitle"`; with new collection suggestions enabled it may contain `"newCollection": { "parentID": 101, "name": "..." }`. Invalid answers are rejected, and IDs that do not exist in Zotero are ignored. If nothing valid remains, “No suitable collections found” is shown.
 
 ## 🔒 Privacy, Cost & Security
 
@@ -209,10 +220,13 @@ Yes. Batch mode calls the AI for all selected items first, then shows a summary 
 
 ## 🛠️ Development & Build
 
+Requires Node.js 22 or newer.
+
 ```bash
 cd zotero-ai-collection
-npm install
+npm ci
 npm run build
+npm test
 ```
 
 - Build output: `builds/zotero-ai-collection.xpi`

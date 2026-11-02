@@ -2,25 +2,24 @@ import { config } from "../../package.json";
 import { AICollectionCandidate, callAI } from "./api";
 import { getString } from "../utils/locale";
 import { getPref } from "../utils/prefs";
-
-const PATH_SEPARATOR = "/";
-
-interface CollectionOption extends AICollectionCandidate {
-  collection: Zotero.Collection;
-  segments: string[];
-  ancestors: Zotero.Collection[];
-}
-
-interface CollectionNode {
-  option: CollectionOption;
-  children: CollectionNode[];
-}
-
-interface EnabledCollections {
-  ids: Set<number>;
-  paths: Set<string>;
-  allEnabledByDefault: boolean;
-}
+import {
+  getEnabledCollections,
+  isCollectionEnabled,
+  type EnabledCollections,
+} from "./collectionScope";
+import {
+  getProposalOptions,
+  recordSuggestion,
+  reviewSuggestions,
+  type SuggestionMap,
+} from "./newCollections";
+import {
+  buildCollectionNodes,
+  flattenNodes,
+  getLeafOptions,
+  type CollectionNode,
+  type CollectionOption,
+} from "./collectionTree";
 
 /**
  * Batch processing result for a single item
@@ -35,129 +34,19 @@ interface BatchItemResult {
   error?: string;
 }
 
-/**
- * Get enabled collection identities from preferences.
- * Numeric IDs are the current format; paths are kept only for older saved settings.
- */
-function getEnabledCollections(): EnabledCollections {
-  try {
-    const enabledJson = getPref("enabledCollections") as string;
-    if (!enabledJson || enabledJson === "undefined") {
-      return {
-        ids: new Set(),
-        paths: new Set(),
-        allEnabledByDefault: true,
-      };
-    }
-    const rawValues = JSON.parse(enabledJson);
-    const ids = new Set<number>();
-    const paths = new Set<string>();
-
-    if (Array.isArray(rawValues)) {
-      for (const value of rawValues) {
-        if (typeof value === "number" && Number.isFinite(value)) {
-          ids.add(value);
-        } else if (typeof value === "string") {
-          const trimmed = value.trim();
-          if (/^\d+$/.test(trimmed)) {
-            ids.add(Number(trimmed));
-          } else if (trimmed) {
-            paths.add(trimmed);
-          }
-        }
-      }
-    }
-
-    return {
-      ids,
-      paths,
-      allEnabledByDefault: false,
-    };
-  } catch {
-    return {
-      ids: new Set(),
-      paths: new Set(),
-      allEnabledByDefault: true,
-    };
-  }
-}
-
-function buildNodeFromCollection(
-  collection: Zotero.Collection,
-  parentSegments: string[] = [],
-  ancestors: Zotero.Collection[] = []
-): CollectionNode {
-  const segments = [...parentSegments, collection.name];
-  const option: CollectionOption = {
-    id: collection.id,
-    path: segments.join(PATH_SEPARATOR),
-    collection,
-    segments,
-    ancestors,
-  };
-
-  return {
-    option,
-    children: collection
-      .getChildCollections(false)
-      .map((child) =>
-        buildNodeFromCollection(child, segments, [...ancestors, collection])
-      ),
-  };
-}
-
-function buildCollectionNodes(
-  collections: Zotero.Collection[]
-): CollectionNode[] {
-  return collections
-    .filter((col) => !col.parentID)
-    .map((col) => buildNodeFromCollection(col));
-}
-
-function flattenNodes(nodes: CollectionNode[]): CollectionNode[] {
-  let result: CollectionNode[] = [];
-  for (const node of nodes) {
-    result.push(node);
-    result = result.concat(flattenNodes(node.children));
-  }
-  return result;
-}
-
-function isNodeEnabled(
-  node: CollectionNode,
-  enabledCollections: EnabledCollections
-): boolean {
-  return (
-    enabledCollections.ids.has(node.option.id) ||
-    enabledCollections.paths.has(node.option.path)
-  );
-}
-
 function hasEnabledDescendant(
   node: CollectionNode,
   enabledCollections: EnabledCollections
 ): boolean {
   for (const child of node.children) {
     if (
-      isNodeEnabled(child, enabledCollections) ||
+      isCollectionEnabled(child.option, enabledCollections) ||
       hasEnabledDescendant(child, enabledCollections)
     ) {
       return true;
     }
   }
   return false;
-}
-
-function getLeafOptions(node: CollectionNode): CollectionOption[] {
-  if (node.children.length === 0) {
-    return [node.option];
-  }
-
-  let options: CollectionOption[] = [];
-  for (const child of node.children) {
-    options = options.concat(getLeafOptions(child));
-  }
-  return options;
 }
 
 /**
@@ -168,7 +57,10 @@ function buildCollectionOptions(
   collections: Zotero.Collection[]
 ): CollectionOption[] {
   const enabledCollections = getEnabledCollections();
-  const tree = buildCollectionNodes(collections);
+  const tree = buildCollectionNodes(
+    collections,
+    Number(getPref("maxDepth")) || 0
+  );
   const allNodes = flattenNodes(tree);
 
   // If no enabled collections stored yet (first time), return all leaf nodes
@@ -181,7 +73,7 @@ function buildCollectionOptions(
   const result = new Map<number, CollectionOption>();
 
   for (const node of allNodes) {
-    if (!isNodeEnabled(node, enabledCollections)) {
+    if (!isCollectionEnabled(node.option, enabledCollections)) {
       continue;
     }
 
@@ -1123,7 +1015,8 @@ async function classifyItemsOneByOne(
   regularItems: Zotero.Item[],
   collectionOptions: CollectionOption[],
   libraryID: number,
-  enableTranslation: boolean
+  enableTranslation: boolean,
+  suggestions: SuggestionMap
 ): Promise<{ processed: number; totalAdded: number }> {
   const win = Zotero.getMainWindow();
   let totalAdded = 0;
@@ -1161,8 +1054,10 @@ async function classifyItemsOneByOne(
         title,
         abstract,
         collectionOptions,
-        enableTranslation
+        enableTranslation,
+        getProposalOptions(libraryID)
       );
+      recordSuggestion(currentItem, aiResult, suggestions);
       const chineseTitle = aiResult.chineseTitle;
       const validOptions = resolveAICollectionOptions(
         aiResult,
@@ -1268,7 +1163,8 @@ async function classifyItemsBatch(
   regularItems: Zotero.Item[],
   collectionOptions: CollectionOption[],
   libraryID: number,
-  enableTranslation: boolean
+  enableTranslation: boolean,
+  suggestions: SuggestionMap
 ): Promise<{ processed: number; totalAdded: number }> {
   let totalAdded = 0;
   const optionByID = new Map(
@@ -1307,8 +1203,10 @@ async function classifyItemsBatch(
         title,
         abstract,
         collectionOptions,
-        enableTranslation
+        enableTranslation,
+        getProposalOptions(libraryID)
       );
+      recordSuggestion(currentItem, aiResult, suggestions);
       const chineseTitle = aiResult.chineseTitle;
       const validOptions = resolveAICollectionOptions(
         aiResult,
@@ -1416,7 +1314,7 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
   const allCollections = Zotero.Collections.getByLibrary(libraryID);
   const collectionOptions = buildCollectionOptions(allCollections);
 
-  if (collectionOptions.length === 0) {
+  if (collectionOptions.length === 0 && !getProposalOptions(libraryID)) {
     win.alert(
       getString("error.nocollections") || "No collections found in library"
     );
@@ -1429,6 +1327,7 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
   // Handle both boolean and string values from radio buttons
   const isBatchMode = batchMode === true || batchMode === "true";
 
+  const suggestions: SuggestionMap = new Map();
   let result: { processed: number; totalAdded: number };
 
   if (isBatchMode) {
@@ -1436,14 +1335,16 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
       regularItems,
       collectionOptions,
       libraryID,
-      enableTranslation
+      enableTranslation,
+      suggestions
     );
   } else {
     result = await classifyItemsOneByOne(
       regularItems,
       collectionOptions,
       libraryID,
-      enableTranslation
+      enableTranslation,
+      suggestions
     );
   }
 
@@ -1470,4 +1371,6 @@ export async function classifyItems(items: Zotero.Item[]): Promise<void> {
       getString("result.added") || "Collections added:"
     } ${result.totalAdded}${egg}`
   );
+
+  await reviewSuggestions(libraryID, regularItems, suggestions);
 }

@@ -1,12 +1,11 @@
 name: Pull Request
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: write # allow pushing code
-  pull-requests: write # allow commenting on PRs
+  contents: read
 
 jobs:
   lint:
@@ -15,9 +14,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,38 +25,13 @@ jobs:
         run: npm ci
 
       - name: Run lint
-        run: npm run lint
+        run: npx eslint . --ext .ts
 
-      - name: Commit & push fixes
-        id: git_push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet; then
-            git add .
-            git commit -m "chore: apply lint fixes"
-            if git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
-                    HEAD:${{ github.head_ref }}; then
-              echo "push_succeeded=true" >> $GITHUB_OUTPUT
-            else
-              echo "push_succeeded=false" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "push_succeeded=true" >> $GITHUB_OUTPUT
-          fi
+      - name: Type check
+        run: npm run tsc
 
-      - name: Comment on PR if push failed
-        if: steps.git_push.outputs.push_succeeded == 'false'
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            @${{ github.event.pull_request.user.login }}
-            I automatically applied lint fixes but couldn’t push to your branch—could you please run:
+      - name: Test
+        run: npm test
 
-            ```bash
-            npm run lint
-            ```
-
-            and push the results? Thanks!
+      - name: Build
+        run: npm run build-prod

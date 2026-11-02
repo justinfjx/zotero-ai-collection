@@ -3,9 +3,16 @@ import { getString } from "../utils/locale";
 import { testConnection } from "./api";
 import { getPref, setPref } from "../utils/prefs";
 import { DEFAULT_PROMPT } from "../utils/constants";
+import type { ProviderKind } from "./llm";
+import { parseSeed } from "./seed";
+import {
+  createMissingCollections,
+  getCollectionsByPath,
+} from "./collectionWriter";
 
 interface ApiConfig {
   name: string;
+  provider?: ProviderKind;
   apiUrl: string;
   model: string;
   apiKey: string;
@@ -75,6 +82,14 @@ function initPrefsUI() {
       savedPrompt && savedPrompt !== "undefined" ? savedPrompt : DEFAULT_PROMPT;
   }
 
+  // Initialize seed collections textarea
+  const seedTextarea = doc.querySelector(
+    `#zotero-prefpane-${config.addonRef}-seedCollections`
+  ) as HTMLTextAreaElement;
+  if (seedTextarea) {
+    seedTextarea.value = (getPref("seedCollections") as string) || "";
+  }
+
   // Initialize config selector
   refreshConfigList();
 
@@ -117,6 +132,7 @@ function localizePrefsUI(doc: Document) {
   setText("saveConfig", "prefs.saveConfig", "label");
   setText("renameConfig", "prefs.rename", "label");
   setText("deleteConfig", "prefs.delete", "label");
+  setText("providerLabel", "prefs.provider");
   setText("apiUrlLabel", "prefs.apiUrl");
   setText("modelLabel", "prefs.model");
   setText("apiKeyLabel", "prefs.apiKey");
@@ -144,6 +160,27 @@ function localizePrefsUI(doc: Document) {
   setText("addToAllPathHelp", "prefs.addToAllPathCollectionsHelp");
   setText("archiveLabel", "prefs.archiveCollectionName");
   setText("archiveHelp", "prefs.archiveCollectionNameHelp");
+
+  // Unfiled items section
+  setText("unfiledTitle", "prefs.unfiledTitle");
+  setText("autoClassifyUnfiled", "prefs.autoClassifyUnfiled", "label");
+  setText("autoClassifyThresholdLabel", "prefs.autoClassifyThreshold");
+  setText("autoClassifyHelp", "prefs.autoClassifyUnfiledHelp");
+
+  // Collection structure section
+  setText("structureTitle", "prefs.structureTitle");
+  setText("maxDepthLabel", "prefs.maxDepth");
+  setText("maxDepthHelp", "prefs.maxDepthHelp");
+  setText("seedLabel", "prefs.seedCollections");
+  setText("seedHelp", "prefs.seedCollectionsHelp");
+  setText("createSeed", "prefs.createSeed", "label");
+
+  // New collections section
+  setText("proposalsTitle", "prefs.proposalsTitle");
+  setText("proposeNewCollections", "prefs.proposeNewCollections", "label");
+  setText("proposalMinItemsLabel", "prefs.proposalMinItems");
+  setText("allowNewTopLevel", "prefs.allowNewTopLevel", "label");
+  setText("proposalsHelp", "prefs.proposalsHelp");
 
   // Translation section
   setText(
@@ -213,6 +250,7 @@ function loadConfig(name: string) {
 
   if (name === "Default") {
     // Reset to default values
+    setPref("provider", "openai-compatible");
     setPref("apiUrl", "https://api.openai.com/v1/chat/completions");
     setPref("model", "gpt-3.5-turbo");
     setPref("apiKey", "");
@@ -220,6 +258,7 @@ function loadConfig(name: string) {
     const configs = getApiConfigs();
     const cfg = configs.find((c) => c.name === name);
     if (cfg) {
+      setPref("provider", cfg.provider || "openai-compatible");
       setPref("apiUrl", cfg.apiUrl);
       setPref("model", cfg.model);
       setPref("apiKey", cfg.apiKey);
@@ -229,6 +268,9 @@ function loadConfig(name: string) {
   setPref("currentConfigName", name);
 
   // Update UI
+  const providerSelect = doc.querySelector(
+    `#zotero-prefpane-${config.addonRef}-provider`
+  ) as XUL.MenuList;
   const apiUrlInput = doc.querySelector(
     `#zotero-prefpane-${config.addonRef}-apiUrl`
   ) as HTMLInputElement;
@@ -239,6 +281,7 @@ function loadConfig(name: string) {
     `#zotero-prefpane-${config.addonRef}-apiKey`
   ) as HTMLInputElement;
 
+  if (providerSelect) providerSelect.value = getPref("provider") as string;
   if (apiUrlInput) apiUrlInput.value = getPref("apiUrl") as string;
   if (modelInput) modelInput.value = getPref("model") as string;
   if (apiKeyInput) apiKeyInput.value = getPref("apiKey") as string;
@@ -277,6 +320,38 @@ function bindPrefEvents() {
       loadConfig(selectedValue);
     });
 
+  // Create seed collections button
+  doc
+    .querySelector(`#zotero-prefpane-${config.addonRef}-createSeed`)
+    ?.addEventListener("click", async () => {
+      const seedTextarea = doc.querySelector(
+        `#zotero-prefpane-${config.addonRef}-seedCollections`
+      ) as HTMLTextAreaElement;
+      setPref("seedCollections", seedTextarea.value);
+
+      const libraryID = Zotero.Libraries.userLibraryID;
+      const existing = getCollectionsByPath(libraryID);
+      const missing = parseSeed(
+        seedTextarea.value,
+        Number(getPref("maxDepth")) || 0
+      ).filter((path) => !existing.has(path));
+
+      if (missing.length === 0) {
+        win.alert(getString("prefs.seedNothing"));
+        return;
+      }
+      const preview = missing.slice(0, 15).join("\n");
+      if (
+        !win.confirm(
+          `${getString("prefs.seedConfirm")} ${missing.length}\n\n${preview}`
+        )
+      ) {
+        return;
+      }
+      const created = await createMissingCollections(libraryID, missing);
+      win.alert(`${getString("prefs.seedCreated")} ${created.length}`);
+    });
+
   // Save config button
   doc
     .querySelector(`#zotero-prefpane-${config.addonRef}-saveConfig`)
@@ -296,6 +371,7 @@ function bindPrefEvents() {
       const existingIdx = configs.findIndex((c) => c.name === name);
       const newConfig: ApiConfig = {
         name: name.trim(),
+        provider: getPref("provider") as ProviderKind,
         apiUrl: getPref("apiUrl") as string,
         model: getPref("model") as string,
         apiKey: getPref("apiKey") as string,
@@ -585,7 +661,7 @@ function setEnabledCollections(ids: number[]) {
  */
 function buildCollectionNodeFromCollection(
   collection: Zotero.Collection,
-  prefix: string = ""
+  prefix = ""
 ): CollectionNode {
   const path = prefix ? `${prefix}/${collection.name}` : collection.name;
   const childCollections = collection.getChildCollections(false);
@@ -777,7 +853,7 @@ function renderCollectionTree(
   container: HTMLDivElement,
   nodes: CollectionNode[],
   enabledIDs: Set<number>,
-  level: number = 0
+  level = 0
 ) {
   const doc = container.ownerDocument;
 

@@ -2,6 +2,10 @@ import { config } from "../package.json";
 import { initLocale } from "./utils/locale";
 import { registerPrefsScripts } from "./modules/preferenceScript";
 import { registerMenu } from "./modules/menu";
+import {
+  registerUnfiledObserver,
+  unregisterUnfiledObserver,
+} from "./modules/unfiled";
 
 /**
  * Startup hook - called when the plugin is enabled
@@ -27,12 +31,16 @@ async function onStartup() {
 
   // Register right-click menu
   registerMenu();
+
+  // Watch for new unfiled items (acts only when enabled in preferences)
+  registerUnfiledObserver();
 }
 
 /**
  * Shutdown hook - called when the plugin is disabled
  */
 function onShutdown(): void {
+  unregisterUnfiledObserver();
   ztoolkit.unregisterAll();
   addon.data.alive = false;
   // @ts-ignore - plugin instance cleanup
