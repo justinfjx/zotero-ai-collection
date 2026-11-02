@@ -3,11 +3,10 @@
     "publish": false
   },
   "github": {
-    "release": true,
-    "assets": ["builds/*.xpi"]
+    "release": false
   },
   "hooks": {
     "after:bump": "npm run build",
-    "after:release": "echo Successfully released ${name} v${version} to ${repo.repository}."
+    "after:release": "echo GitHub Actions will publish ${name} v${version} from the pushed tag."
   }
 }
