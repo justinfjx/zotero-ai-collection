@@ -90,13 +90,20 @@ async function getEligibleItem(libraryID: number, key: string) {
   const item = (await Zotero.Items.getByLibraryAndKeyAsync(libraryID, key)) as
     | Zotero.Item
     | false;
-  return item &&
-    item.libraryID === libraryID &&
-    item.isRegularItem() &&
-    !item.deleted &&
-    item.getCollections().length === 0
-    ? item
-    : undefined;
+  if (
+    !item ||
+    item.libraryID !== libraryID ||
+    !item.isRegularItem() ||
+    item.deleted
+  ) {
+    return undefined;
+  }
+  await item.loadDataType("collections");
+  if (item.getCollections().length > 0) {
+    return undefined;
+  }
+  await item.loadDataType("itemData");
+  return item;
 }
 
 /** Refresh every pending item, including items outside the current batch. */

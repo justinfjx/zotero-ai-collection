@@ -27,7 +27,16 @@ export async function getUnfiledItems(
   search.addCondition("noChildren", "true");
   const ids = await search.search();
   const items = await Zotero.Items.getAsync(ids);
-  return items.filter((item) => item.isRegularItem() && !item.deleted);
+  const regularItems = items.filter(
+    (item) => item.isRegularItem() && !item.deleted
+  );
+  await Promise.all(
+    regularItems.map(async (item) => {
+      await item.loadDataType("itemData");
+      await item.loadDataType("collections");
+    })
+  );
+  return regularItems;
 }
 
 /**

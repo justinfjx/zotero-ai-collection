@@ -40,11 +40,18 @@ class FakeItem {
   deleted = false;
   collections: number[] = [];
   libraryID = LIBRARY;
+  loaded = new Set(["collections", "itemData"]);
 
   constructor(public key: string, public title: string) {}
 
   getCollections() {
+    if (!this.loaded.has("collections"))
+      throw new Error("collections not loaded");
     return this.collections;
+  }
+
+  async loadDataType(type: string) {
+    this.loaded.add(type);
   }
 
   isRegularItem() {
@@ -52,6 +59,7 @@ class FakeItem {
   }
 
   getField() {
+    if (!this.loaded.has("itemData")) throw new Error("itemData not loaded");
     return this.title;
   }
 
@@ -395,6 +403,20 @@ test("historical items filed outside the current batch leave pending suggestions
     world.saved.some((c) => c.name === "Walks"),
     false
   );
+});
+
+test("historical suggestions load collection membership and titles from uncached items", async () => {
+  const items = addItems(2);
+  suggest(items);
+  await reviewSuggestions(LIBRARY, items as any);
+  items[0].collections = [2];
+  items.forEach((item) => item.loaded.clear());
+  await reviewSuggestions(LIBRARY, []);
+  assert.deepEqual(Object.keys(stored()["Algorithms/Walks"].items), [
+    items[1].key,
+  ]);
+  assert.ok(items[1].loaded.has("itemData"));
+  assert.deepEqual(world.dialogs, []);
 });
 
 test("accepting a proposal skips items filed while its dialog was open", async () => {

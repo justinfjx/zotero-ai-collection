@@ -25,6 +25,10 @@ function addItems(count: number) {
       libraryID: 1,
       deleted: false,
       isRegularItem: () => true,
+      loaded: new Set(),
+      async loadDataType(type: string) {
+        this.loaded.add(type);
+      },
     });
   }
 }
@@ -97,6 +101,7 @@ test("searches My Library for live regular unfiled items", async () => {
     (await getUnfiledItems()).map((item) => item.id),
     [1]
   );
+  assert.deepEqual(Array.from(items[0].loaded), ["itemData", "collections"]);
   assert.deepEqual(conditions, [
     ["libraryID", "is", "1"],
     ["unfiled", "true"],
